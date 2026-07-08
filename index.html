@@ -223,10 +223,15 @@ const state = {
   cache: {}
 };
 
-/* ---------- API helper ---------- */
+/* ---------- API helper ----------
+ * ใช้ GET + payload JSON ใน query param — เสถียรกว่า POST เมื่อ fetch ข้ามโดเมนไป Apps Script
+ * (POST เจอ 302 redirect แล้ว browser บางทีได้ HTML กลับมา = JSON.parse พัง) */
 async function api(action, payload){
-  const body = Object.assign({action, token: state.token}, payload || {});
-  const res = await fetch(API, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(body), redirect:'follow'});
+  const body = Object.assign({token: state.token}, payload || {});
+  const url = API + '?action=' + encodeURIComponent(action) +
+              '&payload=' + encodeURIComponent(JSON.stringify(body)) +
+              '&_=' + Date.now();
+  const res = await fetch(url, {method:'GET', redirect:'follow'});
   const data = await res.json();
   if(data && data.error === 'เซสชันหมดอายุ กรุณาล็อกอินใหม่'){ forceLogout(); }
   return data;
