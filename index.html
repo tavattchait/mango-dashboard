@@ -781,7 +781,7 @@ function confirmSaveMonthly(){
 async function renderUsers(){
   const { data: rows, error } = await sb.from('profiles').select('*').order('username');
   if(error){ content('<div class="card"><div class="empty">'+esc(error.message)+'</div></div>'); return; }
-  document.getElementById('topActions').innerHTML = '<button class="btn btn-primary btn-sm" onclick="openUserInfo()">+ วิธีเพิ่มผู้ใช้ใหม่</button>';
+  document.getElementById('topActions').innerHTML = '<button class="btn btn-primary btn-sm" onclick="openUserCreate()">+ เพิ่มผู้ใช้ใหม่</button>';
   content('<div class="card"><div class="table-wrap"><table><thead><tr>'+
     '<th>ชื่อผู้ใช้</th><th>ชื่อ-นามสกุล</th><th>บทบาท</th><th>ฝ่าย</th><th>สถานะ</th><th></th></tr></thead><tbody>'+
     rows.map(u=>{ const d=state.divisions.find(x=>x.id===u.division_id);
@@ -791,19 +791,39 @@ async function renderUsers(){
       '<td><button class="btn btn-ghost btn-sm" onclick=\'openUserEdit('+JSON.stringify(u)+')\'>แก้ไข</button></td></tr>';
     }).join('')+'</tbody></table></div></div>');
 }
-function openUserInfo(){
+function openUserCreate(){
+  const roleOpts=['viewer','pm','manager','accountant','admin'].map(r=>'<option value="'+r+'">'+ROLE_LABEL[r]+'</option>').join('');
+  const deptOpts='<option value="">— ไม่ระบุ —</option>'+state.divisions.map(d=>'<option value="'+d.id+'">'+esc(d.name)+'</option>').join('');
   document.getElementById('modalHost').innerHTML =
     '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
     '<div class="modal-head"><span class="t">+ เพิ่มผู้ใช้ใหม่</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
-    '<div class="modal-body" style="font-size:13.5px;line-height:1.8">'+
-      '<p>เพิ่มผู้ใช้ใหม่ต้องสร้างที่หน้า Supabase Dashboard (ระบบความปลอดภัยกำหนดไว้):</p>'+
-      '<ol style="padding-left:20px;margin-top:8px">'+
-        '<li>Authentication → Users → Add user</li>'+
-        '<li>Email: <code>ชื่อผู้ใช้ที่ต้องการ@wrc.local</code></li>'+
-        '<li>ตั้งรหัสผ่าน แล้วกด Auto Confirm</li>'+
-        '<li>คัดลอก UID มาเพิ่มในตาราง profiles (ผู้ดูแลระบบทำให้ได้)</li>'+
-      '</ol>'+
-    '</div><div class="modal-foot"><button class="btn btn-primary" onclick="closeModal()">เข้าใจแล้ว</button></div></div></div>';
+    '<div class="modal-body">'+
+      '<div class="field light"><label>ชื่อผู้ใช้ (สำหรับ login) *</label><input id="nu_username" placeholder="เช่น somchai" autocomplete="off"></div>'+
+      '<div class="field light"><label>รหัสผ่านเริ่มต้น * (อย่างน้อย 6 ตัว)</label><input id="nu_password" type="text" placeholder="ให้พนักงานเปลี่ยนเองภายหลัง"></div>'+
+      '<div class="field light"><label>ชื่อ-นามสกุล</label><input id="nu_fullName" placeholder="ชื่อที่แสดงในระบบ"></div>'+
+      '<div class="row r2"><div class="field light"><label>บทบาท</label><select id="nu_role">'+roleOpts+'</select></div>'+
+      '<div class="field light"><label>ฝ่าย</label><select id="nu_dept">'+deptOpts+'</select></div></div>'+
+      '<div id="nu_err" class="login-err hidden" style="margin-top:4px"></div>'+
+    '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn btn-primary" id="nu_save" onclick="saveUserCreate()">สร้างผู้ใช้</button></div></div></div>';
+}
+async function saveUserCreate(){
+  const g=k=>(document.getElementById(k)||{}).value;
+  const username = g('nu_username').trim();
+  const password = g('nu_password');
+  const err = document.getElementById('nu_err');
+  err.classList.add('hidden');
+  if(!username){ err.textContent='กรอกชื่อผู้ใช้'; err.classList.remove('hidden'); return; }
+  if(password.length<6){ err.textContent='รหัสผ่านต้องยาวอย่างน้อย 6 ตัว'; err.classList.remove('hidden'); return; }
+  const btn = document.getElementById('nu_save'); btn.disabled=true; btn.textContent='กำลังสร้าง...';
+  try{
+    const { data, error } = await sb.functions.invoke('create-user', { body: {
+      username, password, full_name: g('nu_fullName')||username, role: g('nu_role'), division_id: g('nu_dept')||null
+    }});
+    if(error || (data && data.error)){ err.textContent = (data&&data.error) || error.message; err.classList.remove('hidden'); return; }
+    closeModal(); toast('สร้างผู้ใช้ '+username+' เรียบร้อย','ok'); renderUsers();
+  }catch(ex){ err.textContent = 'เชื่อมต่อไม่ได้: '+ex.message; err.classList.remove('hidden'); }
+  finally{ btn.disabled=false; btn.textContent='สร้างผู้ใช้'; }
 }
 function openUserEdit(u){
   const roleOpts=['admin','manager','pm','accountant','viewer'].map(r=>'<option value="'+r+'"'+(u.role===r?' selected':'')+'>'+ROLE_LABEL[r]+'</option>').join('');
