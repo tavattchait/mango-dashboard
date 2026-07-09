@@ -575,9 +575,11 @@ async function importMangoSelected(){
   const rows = state.cache.mangoCandidates || [];
   const picked = [...document.querySelectorAll('.mango-chk:checked')].map(el=>rows[+el.dataset.i]);
   if(!picked.length){ toast('เลือกอย่างน้อย 1 โครงการ','err'); return; }
-  const { error } = await sb.from('projects').insert(picked);
+  const seen = new Set();
+  const deduped = picked.filter(p => seen.has(p.code) ? false : (seen.add(p.code), true));
+  const { error } = await sb.from('projects').insert(deduped);
   if(error){ toast(error.message,'err'); return; }
-  closeModal(); toast('นำเข้า '+picked.length+' โครงการเรียบร้อย','ok'); go(state.page, state.selDiv);
+  closeModal(); toast('นำเข้า '+deduped.length+' โครงการเรียบร้อย','ok'); go(state.page, state.selDiv);
 }
 
 /* ============================================================
