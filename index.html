@@ -607,7 +607,7 @@ async function renderProjects(){
 async function renderProject(projId){
   const { data: p } = await sb.from('projects').select('*').eq('id', projId).single();
   if(!p){ content('<div class="card"><div class="empty">ไม่พบโครงการ</div></div>'); return; }
-  const [{data:months},{data:fin},{data:sc},{data:loss},{data:stk},{data:mile},{data:cost}] = await Promise.all([
+  const [{data:months},{data:fin},{data:sc},{data:loss},{data:stk},{data:mile},{data:cost},{data:att}] = await Promise.all([
     sb.from('project_monthly').select('*').eq('project_id', projId).order('month', {ascending:false}),
     sb.from('financials').select('*').eq('project_id', projId).order('month', {ascending:false}),
     sb.from('scurve').select('*').eq('project_id', projId).order('month'),
@@ -615,6 +615,7 @@ async function renderProject(projId){
     sb.from('stock').select('*').eq('project_id', projId).order('material'),
     sb.from('milestones').select('*').eq('project_id', projId).order('sort_order'),
     sb.from('cost_entries').select('*').eq('project_id', projId).order('entry_date', {ascending:false}),
+    sb.from('attachments').select('*').eq('project_id', projId).order('uploaded_at', {ascending:false}),
   ]);
   const rows = months||[];
   const totalSpent = rows.reduce((s,r)=>s+(+r.cost_actual||0),0);
@@ -623,7 +624,7 @@ async function renderProject(projId){
   const gp = totalCon - totalSpent;
   const d = state.divisions.find(x=>x.id===p.division_id);
   const editable = canWrite(p.division_id);
-  state.cache.proj = { p, months:rows, fin:fin||[], sc:sc||[], loss:loss||[], stk:stk||[], mile:mile||[], cost:cost||[] };
+  state.cache.proj = { p, months:rows, fin:fin||[], sc:sc||[], loss:loss||[], stk:stk||[], mile:mile||[], cost:cost||[], att:att||[] };
 
   document.getElementById('topActions').innerHTML =
     (editable?'<button class="btn btn-primary btn-sm" onclick="openMonthlyEntry(\''+projId+'\')">📝 รายงานความคืบหน้า</button> ':'')+
@@ -646,7 +647,7 @@ async function renderProject(projId){
 
   const tabs = [
     ['overview','📅 รายเดือน'], ['fin','💰 การเงิน'], ['scurve','📈 S-Curve'],
-    ['loss','⚠️ ความเสียหาย'], ['stock','📦 สต็อก'], ['mile','🏁 Milestones'], ['cost','🧾 บันทึกต้นทุน']
+    ['loss','⚠️ ความเสียหาย'], ['stock','📦 สต็อก'], ['mile','🏁 Milestones'], ['cost','🧾 บันทึกต้นทุน'], ['att','📎 เอกสารแนบ']
   ];
   html += '<div class="card"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;border-bottom:1px solid var(--line);padding-bottom:12px">'+
     tabs.map((t,i)=>'<button class="btn btn-sm '+(i===0?'btn-primary':'btn-ghost')+'" data-ptab="'+t[0]+'" onclick="projTab(\''+t[0]+'\')">'+t[1]+'</button>').join('')+
@@ -712,7 +713,35 @@ function projTab(tab, first){
       '</tbody></table></div>');
   } else if(tab==='cost'){
     host.innerHTML = renderCostTable(c.cost, true);
+  } else if(tab==='att'){
+    host.innerHTML = (editable?'<div style="margin-bottom:12px"><input type="file" id="att_file" style="display:inline-block;max-width:280px"> '+
+      '<button class="btn btn-primary btn-sm" onclick="uploadAttachment(\''+p.id+'\')">📎 อัปโหลด</button></div>':'')+
+      (!c.att.length ? '<div class="empty">ยังไม่มีเอกสารแนบ</div>' :
+      '<div class="table-wrap"><table><thead><tr><th>ไฟล์</th><th>อัปโหลดเมื่อ</th><th></th></tr></thead><tbody>'+
+      c.att.map(r=>'<tr><td><a href="'+esc(r.file_url)+'" target="_blank" rel="noopener">'+esc(r.name)+'</a></td>'+
+        '<td>'+thDate((r.uploaded_at||'').slice(0,10))+'</td>'+
+        '<td>'+(editable?'<button class="btn btn-ghost btn-sm" onclick="delAttachment(\''+r.id+'\',\''+p.id+'\')">ลบ</button>':'')+'</td></tr>').join('')+
+      '</tbody></table></div>');
   }
+}
+async function uploadAttachment(projId){
+  const inp = document.getElementById('att_file');
+  const file = inp && inp.files[0];
+  if(!file){ toast('เลือกไฟล์ก่อน','err'); return; }
+  const path = projId+'/'+Date.now()+'_'+file.name;
+  const { error: upErr } = await sb.storage.from('attachments').upload(path, file);
+  if(upErr){ toast(upErr.message,'err'); return; }
+  const { data: pub } = sb.storage.from('attachments').getPublicUrl(path);
+  const { data:{ user } } = await sb.auth.getUser();
+  const { error } = await sb.from('attachments').insert({ project_id:projId, file_url:pub.publicUrl, name:file.name, uploaded_by:user.id });
+  if(error){ toast(error.message,'err'); return; }
+  toast('อัปโหลดเรียบร้อย','ok'); go('project', projId);
+}
+async function delAttachment(id, projId){
+  if(!confirm('ลบไฟล์นี้?')) return;
+  const { error } = await sb.from('attachments').delete().eq('id', id);
+  if(error){ toast(error.message,'err'); return; }
+  toast('ลบแล้ว','ok'); go('project', projId);
 }
 
 /* ============================================================
