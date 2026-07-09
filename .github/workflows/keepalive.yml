@@ -1,0 +1,18 @@
+name: Keep Supabase awake
+
+# Supabase ฟรีจะพักโปรเจกต์ (pause) ถ้าไม่มีการใช้งานติดต่อกัน 7 วัน
+# workflow นี้แค่ "แตะ" ฐานข้อมูลทุก 3 วัน (นับเป็นการใช้งาน) กันไม่ให้หลับเลย
+on:
+  schedule:
+    - cron: '0 3 */3 * *'   # ทุก 3 วัน เวลา 03:00 UTC (~10:00 น. เมืองไทย)
+  workflow_dispatch: {}      # กดรันเองได้จากแท็บ Actions เผื่ออยากเทสต์
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST API
+        run: |
+          curl -sf "https://ryesfzzsolnsarkkibwa.supabase.co/rest/v1/divisions?select=id&limit=1" \
+            -H "apikey: sb_publishable__LTMHdZUUj03iPHsAy3Lfw_7k_2e9ZL" \
+            -o /dev/null -w "HTTP %{http_code}\n"
