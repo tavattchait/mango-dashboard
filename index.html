@@ -361,8 +361,16 @@ function renderNav(){
       '<div class="sb-div-item" data-div="'+d.id+'" onclick="go(\'division\',\''+d.id+'\')">'+
         '<span class="sb-div-dot" style="background:'+esc(d.accent_color||'#888')+'"></span>'+esc(d.name)+'</div>'
     ).join('') + '</div>';
+  const canOps = isAdmin || role==='pm' || role==='manager' || role==='accountant';
   html += '<div class="sb-group-t">งาน</div>'+
     '<div class="sb-item" data-page="projects" onclick="go(\'projects\')"><span class="ico">📁</span>ทะเบียนโครงการ</div>';
+  if(canOps){
+    html += '<div class="sb-item" data-page="cost-entries" onclick="go(\'cost-entries\')"><span class="ico">🧾</span>บันทึกต้นทุน</div>';
+  }
+  if(isAdmin || role==='pm' || role==='manager'){
+    html += '<div class="sb-item" data-page="daily-plan" onclick="go(\'daily-plan\')"><span class="ico">📅</span>แผนรายวัน</div>'+
+      '<div class="sb-item" data-page="teams" onclick="go(\'teams\')"><span class="ico">🧑‍🤝‍🧑</span>ทีมงาน</div>';
+  }
   if(isAdmin){
     html += '<div class="sb-group-t">ผู้ดูแลระบบ</div>'+
       '<div class="sb-item" data-page="users" onclick="go(\'users\')"><span class="ico">👥</span>ผู้ใช้งาน</div>'+
@@ -389,6 +397,9 @@ async function go(page, arg){
   else if(page==='users'){ setHead('WRC · ERP · ผู้ดูแลระบบ','ผู้ใช้งาน'); markActiveNav('users'); await renderUsers(); }
   else if(page==='targets'){ setHead('WRC · ERP · ผู้ดูแลระบบ','เป้าหมายบริษัท'); markActiveNav('targets'); await renderTargets(); }
   else if(page==='audit'){ setHead('WRC · ERP · ผู้ดูแลระบบ','ประวัติการใช้งาน'); markActiveNav('audit'); await renderAudit(); }
+  else if(page==='cost-entries'){ setHead('WRC · ERP','บันทึกต้นทุน'); markActiveNav('cost-entries'); await renderCostEntries(); }
+  else if(page==='daily-plan'){ setHead('WRC · ERP','แผนรายวัน'); markActiveNav('daily-plan'); await renderDailyPlan(); }
+  else if(page==='teams'){ setHead('WRC · ERP','ทีมงาน'); markActiveNav('teams'); await renderTeams(); }
 }
 function setHead(crumb,title){ document.getElementById('crumb').textContent=crumb; document.getElementById('pageTitle').textContent=title; }
 function canWrite(divisionId){
@@ -491,7 +502,9 @@ async function renderDivision(divId){
   const agg = sumDivision(projects, monthly, divId, month);
 
   if(canWrite(divId))
-    document.getElementById('topActions').innerHTML = '<button class="btn btn-primary btn-sm" onclick="openProject(null,\''+divId+'\')">+ โครงการใหม่</button>';
+    document.getElementById('topActions').innerHTML =
+      '<button class="btn btn-ghost btn-sm" onclick="openMangoSync(\''+divId+'\')">⬇️ ดึงจาก Mango</button> '+
+      '<button class="btn btn-primary btn-sm" onclick="openProject(null,\''+divId+'\')">+ โครงการใหม่</button>';
 
   let html = '<div class="grid g4" style="margin-bottom:18px">'+
     kpi('รายได้ ('+thMonth(month)+')', fmt(agg.rev), 'บาท')+
@@ -522,6 +535,52 @@ function statusPill(s){
 function kpi(l,v,sub){ return '<div class="kpi"><div class="lb">'+esc(l)+'</div><div class="vl tnum">'+v+'</div><div class="sub">'+esc(sub)+'</div></div>'; }
 
 /* ============================================================
+ * MANGO SYNC — ดึงรายชื่อโครงการที่ยังไม่มีในระบบมาจาก Mango (ผ่าน Edge Function proxy)
+ * ============================================================ */
+async function openMangoSync(divId){
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg"><div class="modal"><div class="modal-head"><span class="t">⬇️ ดึงจาก Mango</span>'+
+    '<button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body"><div class="empty">กำลังดึงข้อมูลจาก Mango…</div></div></div></div>';
+  try{
+    const { data:{ session } } = await sb.auth.getSession();
+    const url = SUPA_URL + '/functions/v1/mango-sync?dept=' + encodeURIComponent(divId);
+    const res = await fetch(url, { headers: { Authorization: 'Bearer '+session.access_token, apikey: SUPA_KEY } });
+    const data = await res.json();
+    if(!res.ok || data.error){ throw new Error(data.error || ('HTTP '+res.status)); }
+    state.cache.mangoCandidates = data.projects || [];
+    renderMangoList();
+  }catch(ex){
+    document.getElementById('modalHost').querySelector('.modal-body').innerHTML =
+      '<div class="empty">ดึงข้อมูลไม่สำเร็จ: '+esc(ex.message)+'<br><br>อาจเป็นเพราะเชื่อมต่อ Mango ไม่ได้ หรือยังไม่ได้ deploy ฟังก์ชัน mango-sync</div>';
+  }
+}
+function renderMangoList(){
+  const rows = state.cache.mangoCandidates || [];
+  const body = rows.length ?
+    '<div style="max-height:340px;overflow-y:auto" class="table-wrap"><table><thead><tr><th></th><th>รหัส</th><th>ชื่อโครงการ</th><th>PM</th><th class="num">มูลค่าสัญญา</th></tr></thead><tbody>'+
+    rows.map((p,i)=>'<tr><td><input type="checkbox" class="mango-chk" data-i="'+i+'" checked></td>'+
+      '<td><span class="badge">'+esc(p.code)+'</span></td><td>'+esc(p.name)+'</td><td>'+esc(p.pm||'-')+'</td>'+
+      '<td class="num tnum">'+fmt(p.contract_amt+p.vo_amt)+'</td></tr>').join('')+'</tbody></table></div>' :
+    '<div class="empty">ไม่พบโครงการใหม่ในฝ่ายนี้ (โครงการทั้งหมดใน Mango มีอยู่ในระบบแล้ว)</div>';
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:640px">'+
+    '<div class="modal-head"><span class="t">⬇️ พบ '+rows.length+' โครงการใหม่จาก Mango</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body">'+body+'</div>'+
+    '<div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ปิด</button>'+
+      (rows.length?'<button class="btn btn-primary" onclick="importMangoSelected()">นำเข้าที่เลือก</button>':'')+
+    '</div></div></div>';
+}
+async function importMangoSelected(){
+  const rows = state.cache.mangoCandidates || [];
+  const picked = [...document.querySelectorAll('.mango-chk:checked')].map(el=>rows[+el.dataset.i]);
+  if(!picked.length){ toast('เลือกอย่างน้อย 1 โครงการ','err'); return; }
+  const { error } = await sb.from('projects').insert(picked);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('นำเข้า '+picked.length+' โครงการเรียบร้อย','ok'); go(state.page, state.selDiv);
+}
+
+/* ============================================================
  * ALL PROJECTS
  * ============================================================ */
 async function renderProjects(){
@@ -546,7 +605,15 @@ async function renderProjects(){
 async function renderProject(projId){
   const { data: p } = await sb.from('projects').select('*').eq('id', projId).single();
   if(!p){ content('<div class="card"><div class="empty">ไม่พบโครงการ</div></div>'); return; }
-  const { data: months } = await sb.from('project_monthly').select('*').eq('project_id', projId).order('month', {ascending:false});
+  const [{data:months},{data:fin},{data:sc},{data:loss},{data:stk},{data:mile},{data:cost}] = await Promise.all([
+    sb.from('project_monthly').select('*').eq('project_id', projId).order('month', {ascending:false}),
+    sb.from('financials').select('*').eq('project_id', projId).order('month', {ascending:false}),
+    sb.from('scurve').select('*').eq('project_id', projId).order('month'),
+    sb.from('losses').select('*').eq('project_id', projId).order('month', {ascending:false}),
+    sb.from('stock').select('*').eq('project_id', projId).order('material'),
+    sb.from('milestones').select('*').eq('project_id', projId).order('sort_order'),
+    sb.from('cost_entries').select('*').eq('project_id', projId).order('entry_date', {ascending:false}),
+  ]);
   const rows = months||[];
   const totalSpent = rows.reduce((s,r)=>s+(+r.cost_actual||0),0);
   const totalCon = rows.reduce((s,r)=>s+(+r.con_actual||0),0);
@@ -554,6 +621,7 @@ async function renderProject(projId){
   const gp = totalCon - totalSpent;
   const d = state.divisions.find(x=>x.id===p.division_id);
   const editable = canWrite(p.division_id);
+  state.cache.proj = { p, months:rows, fin:fin||[], sc:sc||[], loss:loss||[], stk:stk||[], mile:mile||[], cost:cost||[] };
 
   document.getElementById('topActions').innerHTML =
     (editable?'<button class="btn btn-primary btn-sm" onclick="openMonthlyEntry(\''+projId+'\')">📝 รายงานความคืบหน้า</button> ':'')+
@@ -574,21 +642,75 @@ async function renderProject(projId){
     kpi('กำไรขั้นต้น', fmt(gp), (totalCon>0?(gp/totalCon*100).toFixed(1)+'% GP':'—'))+
   '</div>';
 
-  html += '<div class="card"><div class="card-title">📅 ความคืบหน้ารายเดือน</div>';
-  if(!rows.length){
-    html += '<div class="empty">ยังไม่มีการรายงานความคืบหน้า'+(editable?'<br><br><button class="btn btn-primary" onclick="openMonthlyEntry(\''+projId+'\')">📝 เริ่มรายงาน</button>':'')+'</div>';
-  } else {
-    html += '<div class="table-wrap"><table><thead><tr><th>เดือน</th><th class="num">ค่างานแผน</th><th class="num">ได้จริง</th>'+
+  const tabs = [
+    ['overview','📅 รายเดือน'], ['fin','💰 การเงิน'], ['scurve','📈 S-Curve'],
+    ['loss','⚠️ ความเสียหาย'], ['stock','📦 สต็อก'], ['mile','🏁 Milestones'], ['cost','🧾 บันทึกต้นทุน']
+  ];
+  html += '<div class="card"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;border-bottom:1px solid var(--line);padding-bottom:12px">'+
+    tabs.map((t,i)=>'<button class="btn btn-sm '+(i===0?'btn-primary':'btn-ghost')+'" data-ptab="'+t[0]+'" onclick="projTab(\''+t[0]+'\')">'+t[1]+'</button>').join('')+
+  '</div><div id="projTabBody"></div></div>';
+  content(html);
+  projTab('overview', true);
+}
+function projTab(tab, first){
+  document.querySelectorAll('[data-ptab]').forEach(b=>b.classList.toggle('btn-primary', b.dataset.ptab===tab));
+  document.querySelectorAll('[data-ptab]').forEach(b=>b.classList.toggle('btn-ghost', b.dataset.ptab!==tab));
+  const c = state.cache.proj; const p = c.p; const editable = canWrite(p.division_id);
+  const host = document.getElementById('projTabBody');
+  if(tab==='overview'){
+    host.innerHTML = !c.months.length ?
+      '<div class="empty">ยังไม่มีการรายงานความคืบหน้า'+(editable?'<br><br><button class="btn btn-primary" onclick="openMonthlyEntry(\''+p.id+'\')">📝 เริ่มรายงาน</button>':'')+'</div>' :
+      '<div class="table-wrap"><table><thead><tr><th>เดือน</th><th class="num">ค่างานแผน</th><th class="num">ได้จริง</th>'+
       '<th class="num">ต้นทุนแผน</th><th class="num">ใช้จริง</th><th class="num">วางบิลแผน</th><th class="num">วางบิลจริง</th><th>สถานะ</th></tr></thead><tbody>'+
-      rows.map(r=>'<tr><td>'+thMonth(r.month)+'</td>'+
+      c.months.map(r=>'<tr><td>'+thMonth(r.month)+'</td>'+
         '<td class="num tnum">'+fmt(r.con_plan)+'</td><td class="num tnum">'+fmt(r.con_actual)+'</td>'+
         '<td class="num tnum">'+fmt(r.cost_budget)+'</td><td class="num tnum">'+fmt(r.cost_actual)+'</td>'+
         '<td class="num tnum">'+fmt(r.bill_plan)+'</td><td class="num tnum">'+fmt(r.bill_actual)+'</td>'+
-        '<td>'+(r.con_status?esc(r.con_status):'-')+'</td></tr>').join('')+
-      '</tbody></table></div>';
+        '<td>'+(r.con_status?esc(r.con_status):'-')+'</td></tr>').join('')+'</tbody></table></div>';
+  } else if(tab==='fin'){
+    host.innerHTML = (editable?'<div style="margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openFinancialEntry(\''+p.id+'\')">+ บันทึกข้อมูลการเงิน</button></div>':'')+
+      (!c.fin.length ? '<div class="empty">ยังไม่มีข้อมูลการเงิน</div>' :
+      '<div class="table-wrap"><table><thead><tr><th>เดือน</th><th class="num">วางบิลแล้ว</th><th class="num">ยังไม่วางบิล</th><th class="num">WIP</th>'+
+      '<th class="num">เงินเข้า</th><th class="num">เงินออก</th><th class="num">คงเหลือ</th><th class="num">AR ค้าง</th><th class="num">AP ค้าง</th></tr></thead><tbody>'+
+      c.fin.map(r=>'<tr><td>'+thMonth(r.month)+'</td><td class="num tnum">'+fmt(r.invoiced)+'</td><td class="num tnum">'+fmt(r.uninvoiced)+'</td>'+
+        '<td class="num tnum">'+fmt(r.wip)+'</td><td class="num tnum">'+fmt(r.cash_in)+'</td><td class="num tnum">'+fmt(r.cash_out)+'</td>'+
+        '<td class="num tnum">'+fmt(r.cash_bal)+'</td><td class="num tnum">'+fmt(r.ar_aging)+'</td><td class="num tnum">'+fmt(r.ap_aging)+'</td></tr>').join('')+
+      '</tbody></table></div>');
+  } else if(tab==='scurve'){
+    host.innerHTML = (editable?'<div style="margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openScurveEntry(\''+p.id+'\')">+ บันทึก S-Curve</button></div>':'')+
+      '<div style="height:280px;position:relative"><canvas id="scurveChart"></canvas></div>';
+    if(c.sc.length){
+      new Chart(document.getElementById('scurveChart'), {type:'line', data:{labels:c.sc.map(r=>thMonth(r.month)),
+        datasets:[
+          {label:'แผนก่อสร้าง',data:c.sc.map(r=>r.plan_work),borderColor:'#8592a8',borderDash:[5,4],tension:.3},
+          {label:'ก่อสร้างจริง',data:c.sc.map(r=>r.actual_work),borderColor:'#2f6fed',backgroundColor:'#eaf1fe',fill:true,tension:.3},
+          {label:'วางบิลจริง',data:c.sc.map(r=>r.actual_bill),borderColor:'#0d9488',tension:.3},
+        ]}, options:{responsive:true,maintainAspectRatio:false,scales:{y:{ticks:{callback:v=>fmtM(v)}}},plugins:{legend:{position:'bottom'}}}});
+    }
+  } else if(tab==='loss'){
+    host.innerHTML = (editable?'<div style="margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openLossEntry(\''+p.id+'\')">+ บันทึกความเสียหาย</button></div>':'')+
+      (!c.loss.length ? '<div class="empty">ไม่มีข้อมูลความเสียหาย</div>' :
+      '<div class="table-wrap"><table><thead><tr><th>เดือน</th><th class="num">รวม</th><th class="num">ความประมาท</th><th class="num">อุปสรรคใต้ดิน</th>'+
+      '<th class="num">รูปแบบก่อสร้าง</th><th class="num">เครื่องจักร</th><th class="num">ร้องเรียน</th><th class="num">อื่นๆ</th></tr></thead><tbody>'+
+      c.loss.map(r=>'<tr><td>'+thMonth(r.month)+'</td><td class="num tnum" style="color:var(--red);font-weight:700">'+fmt(r.total_loss)+'</td>'+
+        '<td class="num tnum">'+fmt(r.neglect)+'</td><td class="num tnum">'+fmt(r.underground)+'</td><td class="num tnum">'+fmt(r.construction)+'</td>'+
+        '<td class="num tnum">'+fmt(r.machinery)+'</td><td class="num tnum">'+fmt(r.complaint)+'</td><td class="num tnum">'+fmt(r.other)+'</td></tr>').join('')+
+      '</tbody></table></div>');
+  } else if(tab==='stock'){
+    host.innerHTML = (editable?'<div style="margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openStockEntry(\''+p.id+'\')">+ เพิ่มวัสดุ</button></div>':'')+
+      (!c.stk.length ? '<div class="empty">ไม่มีข้อมูลสต็อก</div>' :
+      '<div class="table-wrap"><table><thead><tr><th>วัสดุ</th><th>หน่วย</th><th class="num">จำนวนคงเหลือ</th><th class="num">มูลค่าคงเหลือ</th></tr></thead><tbody>'+
+      c.stk.map(r=>'<tr><td>'+esc(r.material)+'</td><td>'+esc(r.unit||'-')+'</td><td class="num tnum">'+fmt(r.qty_balance)+'</td><td class="num tnum">'+fmt(r.amount_balance)+'</td></tr>').join('')+
+      '</tbody></table></div>');
+  } else if(tab==='mile'){
+    host.innerHTML = (editable?'<div style="margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openMilestone(\''+p.id+'\')">+ เพิ่มขั้นตอนงาน</button></div>':'')+
+      (!c.mile.length ? '<div class="empty">ยังไม่มีขั้นตอนงาน</div>' :
+      '<div class="table-wrap"><table><thead><tr><th>ขั้นตอนงาน</th><th>กำหนดเสร็จ</th><th>สถานะ</th></tr></thead><tbody>'+
+      c.mile.map(r=>'<tr><td>'+esc(r.name)+'</td><td>'+thDate(r.due_date)+'</td><td>'+statusPill(r.status)+'</td></tr>').join('')+
+      '</tbody></table></div>');
+  } else if(tab==='cost'){
+    host.innerHTML = renderCostTable(c.cost, true);
   }
-  html += '</div>';
-  content(html);
 }
 
 /* ============================================================
@@ -773,6 +895,323 @@ function confirmSaveMonthly(){
   const reason = (document.getElementById('confirmReason')||{}).value || '';
   if(state.cache.reasonRequired && !reason.trim()){ toast('กรุณาระบุเหตุผล','err'); return; }
   saveMonthlyEntry(state.cache.pendingProj, true, reason);
+}
+
+/* ============================================================
+ * FINANCIALS / S-CURVE / LOSSES / STOCK / MILESTONES — modal forms (เฟส 2/4)
+ * ============================================================ */
+async function openFinancialEntry(projId){
+  const nowYM = currentMonth();
+  const { data: ex } = await sb.from('financials').select('*').eq('project_id',projId).eq('month',nowYM).maybeSingle();
+  const e = ex||{};
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
+    '<div class="modal-head"><span class="t">💰 บันทึกข้อมูลการเงิน</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body">'+
+      '<div class="field light"><label>เดือน</label><input id="fi_month" type="month" value="'+nowYM+'"></div>'+
+      '<div class="row r3">'+fld('fi_invoiced','วางบิลแล้ว')+fld('fi_uninvoiced','ยังไม่วางบิล')+fld('fi_wip','WIP')+'</div>'+
+      '<div class="row r3" style="margin-top:14px">'+fld('fi_cashIn','เงินเข้า')+fld('fi_cashOut','เงินออก')+fld('fi_cashBal','เงินคงเหลือ')+'</div>'+
+      '<div class="row r4" style="margin-top:14px">'+fld('fi_arAge','AR ค้าง')+fld('fi_arRet','AR Retention')+fld('fi_apAge','AP ค้าง')+fld('fi_apRet','AP Retention')+'</div>'+
+    '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn btn-primary" onclick="saveFinancialEntry(\''+projId+'\')">บันทึก</button></div></div></div>';
+  const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=(v==null?'':v); };
+  set('fi_invoiced',e.invoiced); set('fi_uninvoiced',e.uninvoiced); set('fi_wip',e.wip);
+  set('fi_cashIn',e.cash_in); set('fi_cashOut',e.cash_out); set('fi_cashBal',e.cash_bal);
+  set('fi_arAge',e.ar_aging); set('fi_arRet',e.ar_retention); set('fi_apAge',e.ap_aging); set('fi_apRet',e.ap_retention);
+}
+async function saveFinancialEntry(projId){
+  const g=k=>+(document.getElementById(k)||{}).value||0;
+  const month=(document.getElementById('fi_month')||{}).value;
+  if(!month){ toast('เลือกเดือน','err'); return; }
+  const rec={ project_id:projId, month, invoiced:g('fi_invoiced'), uninvoiced:g('fi_uninvoiced'), wip:g('fi_wip'),
+    cash_in:g('fi_cashIn'), cash_out:g('fi_cashOut'), cash_bal:g('fi_cashBal'),
+    ar_aging:g('fi_arAge'), ar_retention:g('fi_arRet'), ap_aging:g('fi_apAge'), ap_retention:g('fi_apRet') };
+  const { data: ex } = await sb.from('financials').select('id').eq('project_id',projId).eq('month',month).maybeSingle();
+  const { error } = ex ? await sb.from('financials').update(rec).eq('id',ex.id) : await sb.from('financials').insert(rec);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('บันทึกเรียบร้อย','ok'); go('project', projId);
+}
+
+async function openScurveEntry(projId){
+  const nowYM = currentMonth();
+  const { data: ex } = await sb.from('scurve').select('*').eq('project_id',projId).eq('month',nowYM).maybeSingle();
+  const e = ex||{};
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
+    '<div class="modal-head"><span class="t">📈 บันทึก S-Curve</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body"><div class="field light"><label>เดือน</label><input id="sc_month" type="month" value="'+nowYM+'"></div>'+
+      '<div class="row r2">'+fld('sc_planWork','แผนก่อสร้าง')+fld('sc_actualWork','ก่อสร้างจริง')+'</div>'+
+      '<div class="row r2" style="margin-top:14px">'+fld('sc_planBill','แผนวางบิล')+fld('sc_actualBill','วางบิลจริง')+'</div>'+
+      '<div style="margin-top:14px">'+fld('sc_actualCost','ต้นทุนจริง')+'</div>'+
+    '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn btn-primary" onclick="saveScurveEntry(\''+projId+'\')">บันทึก</button></div></div></div>';
+  const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=(v==null?'':v); };
+  set('sc_planWork',e.plan_work); set('sc_actualWork',e.actual_work); set('sc_planBill',e.plan_bill);
+  set('sc_actualBill',e.actual_bill); set('sc_actualCost',e.actual_cost);
+}
+async function saveScurveEntry(projId){
+  const g=k=>+(document.getElementById(k)||{}).value||0;
+  const month=(document.getElementById('sc_month')||{}).value;
+  if(!month){ toast('เลือกเดือน','err'); return; }
+  const rec={ project_id:projId, month, plan_work:g('sc_planWork'), actual_work:g('sc_actualWork'),
+    plan_bill:g('sc_planBill'), actual_bill:g('sc_actualBill'), actual_cost:g('sc_actualCost') };
+  const { data: ex } = await sb.from('scurve').select('id').eq('project_id',projId).eq('month',month).maybeSingle();
+  const { error } = ex ? await sb.from('scurve').update(rec).eq('id',ex.id) : await sb.from('scurve').insert(rec);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('บันทึกเรียบร้อย','ok'); go('project', projId);
+}
+
+async function openLossEntry(projId){
+  const nowYM = currentMonth();
+  const { data: ex } = await sb.from('losses').select('*').eq('project_id',projId).eq('month',nowYM).maybeSingle();
+  const e = ex||{};
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
+    '<div class="modal-head"><span class="t">⚠️ บันทึกความเสียหาย</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body"><div class="field light"><label>เดือน</label><input id="ls_month" type="month" value="'+nowYM+'"></div>'+
+      '<div class="row r2">'+fld('ls_actualWork','ก่อสร้างจริง')+fld('ls_totalLoss','มูลค่าความเสียหายรวม')+'</div>'+
+      '<div class="row r3" style="margin-top:14px">'+fld('ls_neglect','ความประมาท')+fld('ls_underground','อุปสรรคใต้ดิน')+fld('ls_construction','รูปแบบก่อสร้าง')+'</div>'+
+      '<div class="row r3" style="margin-top:14px">'+fld('ls_machinery','เครื่องมือเครื่องจักร')+fld('ls_complaint','เรื่องร้องเรียน')+fld('ls_other','อื่นๆ')+'</div>'+
+    '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn btn-primary" onclick="saveLossEntry(\''+projId+'\')">บันทึก</button></div></div></div>';
+  const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=(v==null?'':v); };
+  set('ls_actualWork',e.actual_work); set('ls_totalLoss',e.total_loss); set('ls_neglect',e.neglect);
+  set('ls_underground',e.underground); set('ls_construction',e.construction); set('ls_machinery',e.machinery);
+  set('ls_complaint',e.complaint); set('ls_other',e.other);
+}
+async function saveLossEntry(projId){
+  const g=k=>+(document.getElementById(k)||{}).value||0;
+  const month=(document.getElementById('ls_month')||{}).value;
+  if(!month){ toast('เลือกเดือน','err'); return; }
+  const rec={ project_id:projId, month, actual_work:g('ls_actualWork'), total_loss:g('ls_totalLoss'),
+    neglect:g('ls_neglect'), underground:g('ls_underground'), construction:g('ls_construction'),
+    machinery:g('ls_machinery'), complaint:g('ls_complaint'), other:g('ls_other') };
+  const { data: ex } = await sb.from('losses').select('id').eq('project_id',projId).eq('month',month).maybeSingle();
+  const { error } = ex ? await sb.from('losses').update(rec).eq('id',ex.id) : await sb.from('losses').insert(rec);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('บันทึกเรียบร้อย','ok'); go('project', projId);
+}
+
+function openStockEntry(projId){
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:420px">'+
+    '<div class="modal-head"><span class="t">📦 เพิ่มวัสดุคงเหลือ</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body"><div class="field light"><label>ชื่อวัสดุ</label><input id="st_material"></div>'+
+      '<div class="row r2" style="margin-top:14px"><div class="field light"><label>หน่วย</label><input id="st_unit"></div>'+fld('st_qty','จำนวนคงเหลือ')+'</div>'+
+      '<div style="margin-top:14px">'+fld('st_amount','มูลค่าคงเหลือ (บาท)')+'</div>'+
+    '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn btn-primary" onclick="saveStockEntry(\''+projId+'\')">บันทึก</button></div></div></div>';
+}
+async function saveStockEntry(projId){
+  const material=(document.getElementById('st_material')||{}).value.trim();
+  if(!material){ toast('กรอกชื่อวัสดุ','err'); return; }
+  const rec={ project_id:projId, material, unit:(document.getElementById('st_unit')||{}).value,
+    qty_balance:+(document.getElementById('st_qty')||{}).value||0, amount_balance:+(document.getElementById('st_amount')||{}).value||0 };
+  const { error } = await sb.from('stock').insert(rec);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('บันทึกเรียบร้อย','ok'); go('project', projId);
+}
+
+function openMilestone(projId){
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:420px">'+
+    '<div class="modal-head"><span class="t">🏁 เพิ่มขั้นตอนงาน</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body"><div class="field light"><label>ชื่อขั้นตอนงาน</label><input id="ms_name"></div>'+
+      '<div class="row r2" style="margin-top:14px"><div class="field light"><label>กำหนดเสร็จ</label><input id="ms_due" type="date"></div>'+
+      '<div class="field light"><label>สถานะ</label><select id="ms_status"><option>รอดำเนินการ</option><option>กำลังทำ</option><option>เสร็จแล้ว</option></select></div></div>'+
+    '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn btn-primary" onclick="saveMilestone(\''+projId+'\')">บันทึก</button></div></div></div>';
+}
+async function saveMilestone(projId){
+  const name=(document.getElementById('ms_name')||{}).value.trim();
+  if(!name){ toast('กรอกชื่อขั้นตอนงาน','err'); return; }
+  const rec={ project_id:projId, name, due_date:(document.getElementById('ms_due')||{}).value||null, status:(document.getElementById('ms_status')||{}).value };
+  const { error } = await sb.from('milestones').insert(rec);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('บันทึกเรียบร้อย','ok'); go('project', projId);
+}
+
+/* ============================================================
+ * COST ENTRIES + APPROVAL WORKFLOW (เฟส 3)
+ * ============================================================ */
+const COST_CAT_LABEL = {labor:'ค่าแรง', subcon:'ค่าจ้างเหมา', material:'ค่าวัสดุ', machine:'เครื่องจักร', equip:'อุปกรณ์'};
+const COST_STATUS_LABEL = {draft:'ร่าง', pending:'รออนุมัติ', approved:'อนุมัติแล้ว', paid:'พร้อมเบิกจ่าย'};
+function costStatusPill(s){
+  const map={draft:'',pending:'warn',approved:'ok',paid:'info'};
+  return '<span class="pill '+(map[s]||'')+'">'+(COST_STATUS_LABEL[s]||s)+'</span>';
+}
+async function renderCostEntries(){
+  const projects = await loadAllProjects();
+  state.projects = projects;
+  const { data: rows, error } = await sb.from('cost_entries').select('*').order('entry_date',{ascending:false});
+  if(error){ content('<div class="card"><div class="empty">'+esc(error.message)+'</div></div>'); return; }
+  const canAdd = ['admin','accountant','pm','manager'].includes(state.profile.role);
+  if(canAdd) document.getElementById('topActions').innerHTML = '<button class="btn btn-primary btn-sm" onclick="openCostEntry()">+ บันทึกต้นทุน</button>';
+  const total = { draft:0,pending:0,approved:0,paid:0 };
+  (rows||[]).forEach(r=>{ total[r.status]=(total[r.status]||0)+(+r.amount||0); });
+  let html = '<div class="grid g4" style="margin-bottom:18px">'+
+    kpi('ร่าง', fmt(total.draft), 'บาท')+ kpi('รออนุมัติ', fmt(total.pending), 'บาท')+
+    kpi('อนุมัติแล้ว', fmt(total.approved), 'บาท')+ kpi('พร้อมเบิกจ่าย', fmt(total.paid), 'บาท')+
+  '</div><div class="card">'+renderCostTable(rows||[], false)+'</div>';
+  content(html);
+}
+function renderCostTable(rows, scopedToProject){
+  if(!rows.length) return '<div class="empty">ยังไม่มีรายการต้นทุน</div>';
+  const canApprove = ['admin','accountant'].includes(state.profile.role);
+  return '<div class="table-wrap"><table><thead><tr><th>วันที่</th>'+(scopedToProject?'':'<th>โครงการ</th>')+
+    '<th>หมวด</th><th>รายการ</th><th>ผู้ขาย/ผู้รับเหมา</th><th class="num">จำนวนเงิน</th><th>สถานะ</th><th></th></tr></thead><tbody>'+
+    rows.map(r=>{
+      const proj = state.projects.find(p=>p.id===r.project_id);
+      return '<tr><td>'+thDate(r.entry_date)+'</td>'+(scopedToProject?'':'<td>'+esc(proj?proj.code:'-')+'</td>')+
+        '<td>'+(COST_CAT_LABEL[r.category]||r.category)+'</td><td>'+esc(r.item)+'</td><td>'+esc(r.vendor||'-')+'</td>'+
+        '<td class="num tnum">'+fmt(r.amount)+'</td><td>'+costStatusPill(r.status)+'</td>'+
+        '<td>'+costActionButtons(r, canApprove)+'</td></tr>';
+    }).join('')+'</tbody></table></div>';
+}
+function costActionButtons(r, canApprove){
+  if(r.status==='draft') return canApprove||state.profile.id===r.created_by ? '<button class="btn btn-ghost btn-sm" onclick="setCostStatus(\''+r.id+'\',\'pending\')">ส่งอนุมัติ</button>' : '';
+  if(r.status==='pending' && canApprove) return '<button class="btn btn-primary btn-sm" onclick="setCostStatus(\''+r.id+'\',\'approved\')">อนุมัติ</button>';
+  if(r.status==='approved' && canApprove) return '<button class="btn btn-primary btn-sm" onclick="setCostStatus(\''+r.id+'\',\'paid\')">เบิกจ่ายแล้ว</button>';
+  return '';
+}
+async function setCostStatus(id, status){
+  const rec = { status };
+  if(status==='approved'){ rec.approved_by = (await sb.auth.getUser()).data.user.id; rec.approved_at = new Date().toISOString(); }
+  const { error } = await sb.from('cost_entries').update(rec).eq('id', id);
+  if(error){ toast(error.message,'err'); return; }
+  toast('อัปเดตสถานะเรียบร้อย','ok'); go(state.page);
+}
+function openCostEntry(){
+  const projOpts = state.projects.map(p=>'<option value="'+p.id+'">'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
+  const catOpts = Object.keys(COST_CAT_LABEL).map(k=>'<option value="'+k+'">'+COST_CAT_LABEL[k]+'</option>').join('');
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
+    '<div class="modal-head"><span class="t">🧾 บันทึกต้นทุนใหม่</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body">'+
+      '<div class="field light"><label>โครงการ</label><select id="ce_proj">'+projOpts+'</select></div>'+
+      '<div class="row r2"><div class="field light"><label>วันที่</label><input id="ce_date" type="date" value="'+currentMonth()+'-01"></div>'+
+      '<div class="field light"><label>หมวด</label><select id="ce_cat">'+catOpts+'</select></div></div>'+
+      '<div class="field light"><label>รายการ</label><input id="ce_item" placeholder="เช่น ค่าเหล็กเส้น"></div>'+
+      '<div class="field light"><label>ผู้ขาย/ผู้รับเหมา</label><input id="ce_vendor"></div>'+
+      '<div class="row r2">'+fld('ce_qty','จำนวน')+fld('ce_price','ราคาต่อหน่วย')+'</div>'+
+      '<div class="field light"><label>หมายเหตุ</label><textarea id="ce_note" rows="2"></textarea></div>'+
+    '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn btn-primary" onclick="saveCostEntry()">บันทึก (ร่าง)</button></div></div></div>';
+  document.getElementById('ce_date').value = new Date().toISOString().slice(0,10);
+  const q=document.getElementById('ce_qty'); if(q) q.value=1;
+}
+async function saveCostEntry(){
+  const g=k=>(document.getElementById(k)||{}).value;
+  const item = g('ce_item').trim();
+  if(!item){ toast('กรอกรายการ','err'); return; }
+  const { data:{ user } } = await sb.auth.getUser();
+  const rec = { project_id:g('ce_proj'), entry_date:g('ce_date'), category:g('ce_cat'), item,
+    vendor:g('ce_vendor'), qty:+g('ce_qty')||1, unit_price:+g('ce_price')||0, note:g('ce_note'), created_by:user.id };
+  const { error } = await sb.from('cost_entries').insert(rec);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('บันทึกเรียบร้อย (สถานะ: ร่าง)','ok'); go(state.page==='project'?'project':'cost-entries', state.selProj);
+}
+
+/* ============================================================
+ * DAILY PLAN + TEAMS (เฟส 4)
+ * ============================================================ */
+async function renderDailyPlan(){
+  const myDiv = state.profile.role==='admin' ? (state.divisions[0]||{}).id : state.profile.division_id;
+  const projects = await loadAllProjects(); state.projects = projects;
+  const { data: teams } = await sb.from('teams').select('*').order('name');
+  state.cache.teams = teams||[];
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('topActions').innerHTML = '<button class="btn btn-primary btn-sm" onclick="openDailyTask()">+ เพิ่มงาน</button>';
+  content('<div class="card"><div class="row r2" style="margin-bottom:16px">'+
+    '<div class="field light"><label>ฝ่าย</label><select id="dp_div" onchange="loadDailyPlanFor()">'+
+      state.divisions.map(d=>'<option value="'+d.id+'"'+(d.id===myDiv?' selected':'')+'>'+esc(d.name)+'</option>').join('')+'</select></div>'+
+    '<div class="field light"><label>วันที่</label><input id="dp_date" type="date" value="'+today+'" onchange="loadDailyPlanFor()"></div>'+
+  '</div><div id="dp_body"></div></div>');
+  loadDailyPlanFor();
+}
+async function loadDailyPlanFor(){
+  const div = (document.getElementById('dp_div')||{}).value;
+  const date = (document.getElementById('dp_date')||{}).value;
+  const { data: rows } = await sb.from('daily_plan').select('*').eq('division_id',div).eq('plan_date',date).order('created_at');
+  const body = document.getElementById('dp_body');
+  if(!rows||!rows.length){ body.innerHTML='<div class="empty">ยังไม่มีงานมอบหมายวันนี้</div>'; return; }
+  body.innerHTML = '<div class="table-wrap"><table><thead><tr><th>ทีม</th><th>โครงการ</th><th>งาน</th><th>เริ่ม</th><th class="num">ระยะ(วัน)</th><th class="num">% ความคืบหน้า</th></tr></thead><tbody>'+
+    rows.map(r=>{ const team=state.cache.teams.find(t=>t.id===r.team_id); const proj=state.projects.find(p=>p.id===r.project_id);
+      return '<tr><td>'+esc(team?team.name:'-')+'</td><td>'+esc(proj?proj.code:'-')+'</td><td>'+esc(r.task)+'</td>'+
+        '<td>'+thDate(r.start_date)+'</td><td class="num tnum">'+(r.duration||'-')+'</td><td class="num tnum">'+(r.pct||0)+'%</td></tr>';
+    }).join('')+'</tbody></table></div>';
+}
+function openDailyTask(){
+  const div = (document.getElementById('dp_div')||{}).value || (state.divisions[0]||{}).id;
+  const date = (document.getElementById('dp_date')||{}).value || new Date().toISOString().slice(0,10);
+  const teamOpts = state.cache.teams.filter(t=>t.division_id===div).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
+  const projOpts = state.projects.filter(p=>p.division_id===div).map(p=>'<option value="'+p.id+'">'+esc(p.code)+'</option>').join('');
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
+    '<div class="modal-head"><span class="t">📅 มอบหมายงานใหม่</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body">'+
+      '<div class="row r2"><div class="field light"><label>ทีม</label><select id="dt_team">'+(teamOpts||'<option value="">— ยังไม่มีทีม —</option>')+'</select></div>'+
+      '<div class="field light"><label>โครงการ</label><select id="dt_proj">'+projOpts+'</select></div></div>'+
+      '<div class="field light"><label>ชื่องาน</label><input id="dt_task"></div>'+
+      '<div class="row r3"><div class="field light"><label>เริ่มวันที่</label><input id="dt_start" type="date" value="'+date+'"></div>'+
+      fld('dt_dur','ระยะ (วัน)')+fld('dt_pct','% เริ่มต้น')+'</div>'+
+    '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn btn-primary" onclick="saveDailyTask(\''+div+'\',\''+date+'\')">บันทึก</button></div></div></div>';
+  const dur=document.getElementById('dt_dur'); if(dur) dur.value=1;
+}
+async function saveDailyTask(div, date){
+  const g=k=>(document.getElementById(k)||{}).value;
+  const task=g('dt_task').trim();
+  if(!task){ toast('กรอกชื่องาน','err'); return; }
+  const { data:{ user } } = await sb.auth.getUser();
+  const rec = { division_id:div, plan_date:date, team_id:g('dt_team')||null, project_id:g('dt_proj')||null,
+    task, start_date:g('dt_start')||date, duration:+g('dt_dur')||1, pct:+g('dt_pct')||0, created_by:user.id };
+  const { error } = await sb.from('daily_plan').insert(rec);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('มอบหมายงานเรียบร้อย','ok'); loadDailyPlanFor();
+}
+
+async function renderTeams(){
+  const myDiv = state.profile.role==='admin' ? null : state.profile.division_id;
+  let q = sb.from('teams').select('*').order('division_id').order('name');
+  if(myDiv) q = q.eq('division_id', myDiv);
+  const { data: rows, error } = await q;
+  if(error){ content('<div class="card"><div class="empty">'+esc(error.message)+'</div></div>'); return; }
+  document.getElementById('topActions').innerHTML = '<button class="btn btn-primary btn-sm" onclick="openTeam()">+ เพิ่มทีม</button>';
+  if(!rows.length){ content('<div class="card"><div class="empty">ยังไม่มีทีมงาน</div></div>'); return; }
+  content('<div class="card"><div class="table-wrap"><table><thead><tr><th>ฝ่าย</th><th>ชื่อทีม</th><th>จำนวนสมาชิก</th><th></th></tr></thead><tbody>'+
+    rows.map(t=>{ const d=state.divisions.find(x=>x.id===t.division_id);
+      return '<tr><td>'+esc(d?d.name:t.division_id)+'</td><td><b>'+esc(t.name)+'</b></td><td>'+((t.members||[]).length)+' คน</td>'+
+        '<td><button class="btn btn-ghost btn-sm" onclick=\'openTeam('+JSON.stringify(t)+')\'>แก้ไข</button></td></tr>';
+    }).join('')+'</tbody></table></div></div>');
+}
+function openTeam(t){
+  t=t||{};
+  const deptOpts = state.divisions.map(d=>'<option value="'+d.id+'"'+(t.division_id===d.id?' selected':'')+'>'+esc(d.name)+'</option>').join('');
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:420px">'+
+    '<div class="modal-head"><span class="t">'+(t.id?'แก้ไขทีม':'เพิ่มทีม')+'</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body"><div class="field light"><label>ฝ่าย</label><select id="tm_dept">'+deptOpts+'</select></div>'+
+      '<div class="field light"><label>ชื่อทีม</label><input id="tm_name" value="'+esc(t.name||'')+'"></div>'+
+      '<div class="field light"><label>สมาชิก (คั่นด้วย , )</label><input id="tm_members" value="'+esc((t.members||[]).join(', '))+'"></div>'+
+    '</div><div class="modal-foot">'+(t.id?'<button class="btn btn-danger" onclick="delTeam(\''+t.id+'\')">ลบ</button>':'')+
+      '<div style="flex:1"></div><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn btn-primary" onclick="saveTeam('+(t.id?'\''+t.id+'\'':'null')+')">บันทึก</button></div></div></div>';
+}
+async function saveTeam(id){
+  const name=(document.getElementById('tm_name')||{}).value.trim();
+  if(!name){ toast('กรอกชื่อทีม','err'); return; }
+  const members = (document.getElementById('tm_members')||{}).value.split(',').map(s=>s.trim()).filter(Boolean);
+  const rec = { division_id:(document.getElementById('tm_dept')||{}).value, name, members };
+  const { error } = id ? await sb.from('teams').update(rec).eq('id',id) : await sb.from('teams').insert(rec);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('บันทึกเรียบร้อย','ok'); renderTeams();
+}
+async function delTeam(id){
+  if(!confirm('ลบทีมนี้?')) return;
+  const { error } = await sb.from('teams').delete().eq('id',id);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('ลบแล้ว','ok'); renderTeams();
 }
 
 /* ============================================================
