@@ -981,33 +981,94 @@ async function renderPlanPage(){
 }
 function switchPlanView(v){ state.planView=v; renderPlanPage(); }
 
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function ymd(d){ return d.toISOString().slice(0,10); }
+const WD_T = ['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
+const TEAM_TAG_COLORS = ['#2F6FED','#0D9488','#7C3AED','#D97706','#DC2626','#0891B2'];
+function planShiftWeek(n){ state.cache.planWinOffset = (state.cache.planWinOffset||0) + n; planDay(divCfg(state.ws)); }
+function planJumpToday(){ state.cache.planWinOffset = 0; planDay(divCfg(state.ws)); }
+
 async function planDay(D){
-  const today = new Date().toISOString().slice(0,10);
-  document.getElementById('planBody').innerHTML =
-    '<div class="row r2" style="margin-bottom:14px;max-width:460px"><div class="field"><label>วันที่</label><input id="dp_date" type="date" value="'+today+'" onchange="loadDailyPlanFor()"></div></div>'+
-    '<div id="dp_body"></div>';
-  loadDailyPlanFor();
-}
-async function loadDailyPlanFor(){
-  const D = divCfg(state.ws);
-  const date = (document.getElementById('dp_date')||{}).value;
-  const { data: rows } = await sb.from('daily_plan').select('*').eq('division_id',state.ws).eq('plan_date',date).order('created_at');
-  const body = document.getElementById('dp_body');
-  if(!rows||!rows.length){ body.innerHTML='<div class="card"><div class="empty">ยังไม่มีงานมอบหมายวันนี้</div></div>'; return; }
-  const byTeam = {}; rows.forEach(r=>{ (byTeam[r.team_id||'-']=byTeam[r.team_id||'-']||[]).push(r); });
-  body.innerHTML = '<div class="card" style="padding:0;overflow:hidden">'+Object.keys(byTeam).map(tid=>{
+  const N=21, K=4, colW=44;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const offsetDays = (state.cache.planWinOffset||0)*7;
+  const winStart = addDays(today, offsetDays-K);
+  const winEnd = addDays(winStart, N-1);
+  const fetchFrom = ymd(addDays(winStart,-60));
+  const { data: rows } = await sb.from('daily_plan').select('*').eq('division_id',state.ws)
+    .gte('start_date', fetchFrom).lte('start_date', ymd(winEnd)).order('created_at');
+  const body = document.getElementById('planBody');
+
+  const byTeam = {};
+  (rows||[]).forEach(r=>{
+    const s = new Date(r.start_date+'T00:00:00'); const dur = Math.max(1,+r.duration||1);
+    const e = addDays(s, dur-1);
+    if(e < winStart || s > winEnd) return;
+    (byTeam[r.team_id||'-'] = byTeam[r.team_id||'-'] || []).push({...r, s, e});
+  });
+  const teamIds = Object.keys(byTeam);
+  const rangeText = winStart.getDate()+' '+MONTH_T[winStart.getMonth()]+' – '+winEnd.getDate()+' '+MONTH_T[winEnd.getMonth()]+' '+(winEnd.getFullYear()+543);
+
+  const nav = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'+
+    '<button class="btn btn-ghost btn-sm" onclick="planShiftWeek(-1)">‹ สัปดาห์ก่อน</button>'+
+    '<button class="btn btn-ghost btn-sm" onclick="planJumpToday()">วันนี้</button>'+
+    '<button class="btn btn-ghost btn-sm" onclick="planShiftWeek(1)">สัปดาห์ถัดไป ›</button>'+
+    '<span style="font-size:12px;color:var(--muted);margin-left:6px">'+rangeText+'</span></div>';
+
+  if(!teamIds.length){ body.innerHTML = nav+'<div class="card"><div class="empty">ยังไม่มีงานมอบหมายในช่วงนี้</div></div>'; return; }
+
+  let days=[]; for(let i=0;i<N;i++){ const d=addDays(winStart,i); const isToday = ymd(d)===ymd(today); const dow=d.getDay(); const isWeekend=(dow===0||dow===6);
+    days.push({num:d.getDate(), wd:WD_T[dow], isToday, isWeekend}); }
+
+  let labelCol = '<div style="height:44px;display:flex;align-items:flex-end;padding-bottom:8px;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--line);margin-bottom:6px">งานตามทีม</div>';
+  let gridRows = '';
+  teamIds.forEach((tid,ti)=>{
     const team = state.cache.teams.find(t=>t.id===tid);
-    return '<div style="padding:12px 18px;background:'+D.soft+';display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--line)">'+
-      '<div style="width:26px;height:26px;border-radius:9px;background:'+D.acc+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;font-family:var(--disp)">'+esc((team?team.name:'-').charAt(0))+'</div>'+
-      '<span style="font-size:13px;font-weight:700;color:var(--ink)">'+esc(team?team.name:'ไม่ระบุทีม')+'</span></div>'+
-      byTeam[tid].map(r=>{ const proj=state.projects.find(p=>p.id===r.project_id); const pct=Math.max(0,Math.min(100,+r.pct||0));
-        return '<div style="display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:1px solid #EEF1F8">'+
-          '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:var(--ink)">'+esc(r.task)+'</div>'+
-          '<div style="font-size:10px;color:var(--muted2);margin-top:1px">'+esc(proj?proj.code:'-')+' · เริ่ม '+thDate(r.start_date)+' · '+(r.duration||'-')+' วัน</div></div>'+
-          '<div style="width:160px;flex-shrink:0"><div class="progress-bar"><div style="width:'+pct+'%;background:linear-gradient(90deg,'+D.acc+','+D.acc2+')"></div></div>'+
-          '<div style="font-size:10.5px;color:var(--muted);margin-top:3px;text-align:right" class="tnum">'+pct+'%</div></div></div>';
-      }).join('');
-  }).join('')+'</div>';
+    const tc = TEAM_TAG_COLORS[ti%TEAM_TAG_COLORS.length];
+    const tasks = byTeam[tid];
+    labelCol += '<div style="height:46px;display:flex;align-items:center;gap:9px;'+(ti?'margin-top:10px;border-top:1px solid #EEF1F8;padding-top:14px;height:58px;':'')+'">'+
+      '<div style="width:26px;height:26px;border-radius:9px;background:'+tc+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;font-family:var(--disp);flex-shrink:0">'+esc((team?team.name:'ไม่ระบุ').charAt(0))+'</div>'+
+      '<span style="font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(team?team.name:'ไม่ระบุทีม')+'</span></div>';
+    let cells=''; for(let i=0;i<N;i++) cells+='<div style="background:'+(days[i].isWeekend?'var(--soft)':'transparent')+';height:100%;border-radius:8px"></div>';
+    gridRows += '<div style="height:'+(ti?58:46)+'px;'+(ti?'margin-top:10px;border-top:1px solid #EEF1F8;padding-top:14px;':'')+'">'+
+      '<div style="display:grid;grid-template-columns:repeat('+N+','+colW+'px);height:100%;position:relative">'+cells+'</div></div>';
+
+    tasks.forEach(t=>{
+      const proj = state.projects.find(p=>p.id===t.project_id);
+      const sIdx = Math.max(0, Math.round((t.s-winStart)/86400000));
+      const eIdx = Math.min(N-1, Math.round((t.e-winStart)/86400000));
+      const span = eIdx-sIdx+1;
+      const pct = Math.max(0,Math.min(100,+t.pct||0));
+      labelCol += '<div style="height:46px;display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 4px" title="'+esc(t.task)+'">'+
+        '<div style="flex:1;min-width:0;padding-right:8px"><div style="font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(t.task)+'</div>'+
+        '<div style="font-size:10px;color:var(--muted2);margin-top:1px">'+esc(proj?proj.code:'-')+' · '+thDate(t.start_date)+'</div></div>'+
+        '<span style="font-size:11px;font-weight:700;color:'+(pct>=100?'#0D9488':(pct>0?tc:'#94A3B8'))+';font-family:var(--disp);flex-shrink:0">'+pct+'%</span></div>';
+      let cells2=''; for(let i=0;i<N;i++) cells2+='<div style="background:'+(days[i].isWeekend?'var(--soft)':'transparent')+';height:100%;border-radius:8px"></div>';
+      const todayIdx = days.findIndex(d=>d.isToday);
+      gridRows += '<div style="height:46px"><div style="display:grid;grid-template-columns:repeat('+N+','+colW+'px);height:100%;position:relative">'+cells2+
+        (todayIdx>=0?'<div style="position:absolute;top:2px;bottom:2px;left:'+((todayIdx+0.5)*colW)+'px;width:2px;background:var(--red);border-radius:2px;z-index:3;opacity:.55"></div>':'')+
+        '<div style="grid-column:'+(sIdx+1)+' / span '+span+';align-self:center;height:26px;background:'+tc+'1A;border-radius:999px;position:relative;margin:0 3px;overflow:hidden">'+
+        '<div style="height:100%;width:'+pct+'%;background:linear-gradient(135deg,'+tc+','+tc+'CC);border-radius:999px"></div>'+
+        (span>=2?'<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:10.5px;font-weight:700;color:'+(pct>45?'#fff':'#101A33')+';font-family:var(--mono);white-space:nowrap">'+pct+'%</span>':'')+
+        '</div></div></div>';
+    });
+  });
+
+  let dayHeader = '<div style="display:grid;grid-template-columns:repeat('+N+','+colW+'px);height:44px;border-bottom:1px solid var(--line);margin-bottom:6px">'+
+    days.map(d=>'<div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:6px;gap:3px">'+
+      '<div style="font-size:9px;color:#94A3B8;font-weight:600">'+d.wd+'</div>'+
+      '<div style="width:22px;height:22px;border-radius:999px;display:flex;align-items:center;justify-content:center;background:'+(d.isToday?'var(--red)':'transparent')+';font-size:11px;font-weight:700;color:'+(d.isToday?'#fff':(d.isWeekend?'#64748B':'#101A33'))+';font-family:var(--disp)">'+d.num+'</div></div>').join('')+
+    '</div>';
+
+  body.innerHTML = nav+'<div class="card" style="border-radius:20px;overflow:hidden;padding:0;position:relative">'+
+    '<div style="display:flex">'+
+    '<div style="width:280px;flex-shrink:0;padding:0 8px 8px 18px;border-right:1px solid #EEF1F8">'+labelCol+'</div>'+
+    '<div style="flex:1;overflow-x:auto"><div style="min-width:'+(N*colW)+'px">'+dayHeader+gridRows+'</div></div>'+
+    '</div></div>'+
+    '<div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:var(--muted);align-items:center">'+
+    '<span style="display:flex;align-items:center;gap:5px"><span style="width:20px;height:2px;background:var(--red);display:inline-block"></span>วันนี้</span>'+
+    '<span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:10px;background:var(--soft);display:inline-block;border-radius:16px"></span>วันหยุดสุดสัปดาห์</span>'+
+    '<span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:10px;background:'+D.acc+';display:inline-block;border-radius:16px"></span>งานย่อย + % ความคืบหน้า</span></div>';
 }
 async function planMonth(D){
   const year = new Date().getFullYear();
@@ -1624,7 +1685,7 @@ async function delTeam(id){
  * DAILY TASK ASSIGN (modal, used from Plan/Day)
  * ============================================================ */
 function openDailyTask(){
-  const date = (document.getElementById('dp_date')||{}).value || new Date().toISOString().slice(0,10);
+  const date = new Date().toISOString().slice(0,10);
   const teamOpts = (state.cache.teams||[]).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
   const projOpts = state.projects.filter(p=>p.division_id===state.ws).map(p=>'<option value="'+p.id+'">'+esc(p.code)+'</option>').join('');
   document.getElementById('modalHost').innerHTML =
@@ -1649,7 +1710,7 @@ async function saveDailyTask(date){
     task, start_date:g('dt_start')||date, duration:+g('dt_dur')||1, pct:+g('dt_pct')||0, created_by:user.id };
   const { error } = await sb.from('daily_plan').insert(rec);
   if(error){ toast(error.message,'err'); return; }
-  closeModal(); toast('มอบหมายงานเรียบร้อย','ok'); loadDailyPlanFor();
+  closeModal(); toast('มอบหมายงานเรียบร้อย','ok'); planDay(divCfg(state.ws));
 }
 
 /* ============================================================
