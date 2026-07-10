@@ -258,7 +258,184 @@ td.num,th.num{text-align:right}
  * ============================================================ */
 const SUPA_URL = 'https://ryesfzzsolnsarkkibwa.supabase.co';
 const SUPA_KEY = 'sb_publishable__LTMHdZUUj03iPHsAy3Lfw_7k_2e9ZL';
-const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+/* ============================================================
+ * DEMO MODE — no login required, all data in-memory (nothing touches real Supabase)
+ * flip to false once real users/data are ready — see doLogin()/boot() below for the other half
+ * ============================================================ */
+const DEMO_MODE = true;
+
+function ymdOffset(days){ const d=new Date(); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); }
+function ymOffset(monthsAgo){ const d=new Date(); d.setMonth(d.getMonth()-monthsAgo); return d.toISOString().slice(0,7); }
+function genId(){ return 'demo-'+Math.random().toString(36).slice(2,10); }
+
+function buildMockDb(){
+  const divisions = [
+    { id:'pjcm', name:'ฝ่ายบริหารโครงการ', tagline:'งานเดินสายไฟฟ้าบนดิน & ใต้ดิน', accent_color:'#2F6FED', sort_order:1 },
+    { id:'en', name:'ฝ่ายพลังงาน', tagline:'ระบบผลิตไฟฟ้าพลังงานแสงอาทิตย์', accent_color:'#0D9488', sort_order:2 },
+    { id:'pc', name:'ฝ่ายหล่อบ่อ', tagline:'งานคอนกรีต บ่อพัก & โครงสร้างโยธา', accent_color:'#D97706', sort_order:3 },
+  ];
+  const projectSeed = [
+    ['pjcm','PJ-2601','ปรับปรุงระบบจำหน่ายไฟฟ้าแรงต่ำ ต.บางพลี','การไฟฟ้าส่วนภูมิภาค','สมุทรปราการ','อนันต์ ศรีสุข',12500000,'กำลังดำเนินการ',-60,180],
+    ['pjcm','PJ-2602','เดินสายไฟฟ้าใต้ดินย่านเมืองเก่า ภูเก็ต','เทศบาลนครภูเก็ต','ภูเก็ต','อนันต์ ศรีสุข',6700000,'วางแผน',10,240],
+    ['pjcm','PJ-2603','ขยายเขตจำหน่ายไฟฟ้าชุมชนหนองปรือ','เทศบาลเมืองหนองปรือ','ชลบุรี','สมชาย ก้องภพ',5200000,'ใกล้เสร็จ',-200,-10],
+    ['en','EN-2601','โซลาร์ฟาร์ม 2 เมกะวัตต์ โคราช','บ. พลังงานสะอาดไทย','นครราชสีมา','วิภาดา ทองคำ',42000000,'กำลังดำเนินการ',-90,150],
+    ['en','EN-2602','ติดตั้งโซลาร์รูฟท็อป โรงงานอมตะซิตี้','บ. อมตะ คอร์ปอเรชัน','ชลบุรี','วิภาดา ทองคำ',8900000,'วางแผน',20,180],
+    ['en','EN-2603','โซลาร์เซลล์ลอยน้ำ อ่างเก็บน้ำ','การประปาส่วนภูมิภาค','ระยอง','วิภาดา ทองคำ',15600000,'กำลังดำเนินการ',-30,210],
+    ['pc','PC-2601','งานหล่อบ่อพักและท่อร้อยสาย ถ.สุขุมวิท','กรมทางหลวง','ระยอง','ประเสริฐ มั่นคง',3400000,'วางแผน',15,230],
+    ['pc','PC-2602','บ่อพักน้ำและงานคอนกรีตนิคมฯ เหมราช','บ. เหมราชพัฒนาที่ดิน','ชลบุรี','ประเสริฐ มั่นคง',4100000,'กำลังดำเนินการ',-45,165],
+    ['pc','PC-2603','งานโครงสร้างคอนกรีตสะพานลอยคนเดินข้าม','กรมทางหลวงชนบท','สมุทรปราการ','ประเสริฐ มั่นคง',6300000,'ใกล้เสร็จ',-150,-5],
+  ];
+  const projects = projectSeed.map(r=>({ id:genId(), division_id:r[0], code:r[1], name:r[2], client:r[3], location:r[4], pm:r[5],
+    type:'', contract_amt:r[6], vo_amt:0, budget:0, total_amt:r[6], contract_no:'', status:r[7], start_date:ymdOffset(r[8]), end_date:ymdOffset(r[9]) }));
+
+  const project_monthly = [];
+  projects.forEach(p=>{
+    for(let m=3;m>=0;m--){
+      const frac = Math.max(0.15, 1-m*0.28);
+      const conActual = Math.round(p.total_amt*frac*0.22);
+      project_monthly.push({ id:genId(), project_id:p.id, month:ymOffset(m),
+        con_plan:Math.round(conActual*1.08), con_should:Math.round(conActual*1.03), con_actual:conActual, con_status:'ตามแผน',
+        cost_budget:Math.round(p.total_amt*0.75), cost_should:Math.round(conActual*0.68), cost_actual:Math.round(conActual*0.66), cost_status:'ปกติ',
+        submit_due:null, submit_actual:null, bill_plan:conActual, bill_actual:Math.round(conActual*0.95), bill_due:null, bill_actual_date:null, note:'' });
+    }
+  });
+
+  const teams = [
+    { id:genId(), division_id:'pjcm', name:'ทีม A สายใต้ดิน', members:['อนันต์ ศรีสุข','วีระ ใจดี'] },
+    { id:genId(), division_id:'pjcm', name:'ทีม C ไลน์แมน', members:['สมชาย ก้องภพ'] },
+    { id:genId(), division_id:'en', name:'ทีม B โซลาร์', members:['วิภาดา ทองคำ','ธนา สว่างวงศ์'] },
+    { id:genId(), division_id:'pc', name:'ทีม D โยธา/บ่อปูน', members:['ประเสริฐ มั่นคง'] },
+  ];
+
+  const dailyTasksSeed = [
+    ['pjcm',0,'ทีม A สายใต้ดิน','PJ-2601','ขุดเปิด + วางท่อ HDD',-2,8,70],
+    ['pjcm',0,'ทีม A สายใต้ดิน','PJ-2601','ร้อยสาย + เชื่อมต่อ',6,6,20],
+    ['pjcm',1,'ทีม C ไลน์แมน','PJ-2603','ปักเสาไฟฟ้า LED',-1,5,100],
+    ['en',2,'ทีม B โซลาร์','EN-2601','ติดตั้งโครงสร้างแผง',-3,7,80],
+    ['en',2,'ทีม B โซลาร์','EN-2601','ติดตั้งแผงโซลาร์ 550W',4,8,40],
+    ['pc',3,'ทีม D โยธา/บ่อปูน','PC-2602','งานเหล็กเสริม + แบบหล่อ',-1,7,35],
+  ];
+  const daily_plan = dailyTasksSeed.map(r=>{
+    const team = teams[r[1]]; const proj = projects.find(p=>p.code===r[3]);
+    return { id:genId(), division_id:r[0], plan_date:ymdOffset(r[5]), start_date:ymdOffset(r[5]), team_id:team.id, project_id:proj?proj.id:null,
+      task:r[4], duration:r[6], pct:r[7], created_by:null, created_at:new Date().toISOString() };
+  });
+
+  const milestoneSeed = [
+    ['PJ-2601','สำรวจ & ออกแบบ','เสร็จแล้ว',-50],['PJ-2601','จัดหาวัสดุ & อุปกรณ์','เสร็จแล้ว',-20],
+    ['PJ-2601','ดำเนินงานหน้างาน','กำลังทำ',20],['PJ-2601','ทดสอบระบบ','รอดำเนินการ',60],['PJ-2601','ส่งมอบ & ตรวจรับ','รอดำเนินการ',90],
+  ];
+  const milestones = milestoneSeed.map(r=>{ const proj=projects.find(p=>p.code===r[0]);
+    return { id:genId(), project_id:proj.id, name:r[1], status:r[2], due_date:ymdOffset(r[3]), sort_order:0 }; });
+
+  const costSeed = [
+    ['PJ-2601','material','ท่อ HDPE 110mm x 320 ม.','ไทยไพพ์',320,890,'approved'],
+    ['EN-2601','equip','แผงโซลาร์ 550W','JA Solar',240,6500,'pending'],
+    ['PC-2602','material','ปูนซีเมนต์ + เหล็กเสริม','SCG',12,8040,'approved'],
+    ['PJ-2603','labor','ค่าแรงไลน์แมนทีม C','-',6,16000,'draft'],
+  ];
+  const cost_entries = costSeed.map(r=>{ const proj=projects.find(p=>p.code===r[0]);
+    return { id:genId(), project_id:proj.id, entry_date:ymdOffset(-Math.floor(Math.random()*10)), category:r[1], cost_code:'', item:r[2], vendor:r[3],
+      qty:r[4], unit_price:r[5], amount:r[4]*r[5], status:r[6], note:'', created_by:null, approved_by:null, approved_at:null, created_at:new Date().toISOString() }; });
+
+  const requisitions = [
+    { id:genId(), project_id:projects.find(p=>p.code==='EN-2601').id, division_id:'en', team_id:teams[2].id, kind:'รถ', item:'รถเครน 10 ตัน', reason:'ยกแผงโซลาร์ขึ้นโครงสร้าง', detail:'', when_date:ymdOffset(2), status:'รออนุมัติ', created_by:null, approved_by:null, approved_at:null, created_at:new Date().toISOString() },
+  ];
+
+  const targets = [
+    { key:'gp', label:'กำไรขั้นต้น', per_month:8, per_year:96 },
+    { key:'rev', label:'รายได้', per_month:45, per_year:540 },
+    { key:'cf', label:'กระแสเงินสด', per_month:30, per_year:360 },
+    { key:'bill', label:'วางบิล', per_month:42, per_year:504 },
+  ];
+
+  const audit_log = [
+    { id:genId(), ts:new Date(Date.now()-2*3600e3).toISOString(), actor_name:'อนันต์ ศรีสุข', action:'update', entity:'project_monthly', entity_key:'PJ-2601' },
+    { id:genId(), ts:new Date(Date.now()-6*3600e3).toISOString(), actor_name:'วิภาดา ทองคำ', action:'insert', entity:'cost_entries', entity_key:'EN-2601' },
+    { id:genId(), ts:new Date(Date.now()-26*3600e3).toISOString(), actor_name:'ประเสริฐ มั่นคง', action:'insert', entity:'projects', entity_key:'PC-2603' },
+    { id:genId(), ts:new Date(Date.now()-50*3600e3).toISOString(), actor_name:'สมชาย ก้องภพ', action:'update', entity:'projects', entity_key:'PJ-2603' },
+  ];
+
+  const profiles = [
+    { id:'demo-admin', username:'demo', full_name:'ผู้เยี่ยมชม (โหมดพรีวิว)', role:'admin', division_id:null, phone:'', status:'ใช้งาน', active:true },
+  ];
+
+  return { divisions, profiles, projects, project_monthly, financials:[], scurve:[], losses:[], stock:[],
+    milestones, cost_entries, teams, daily_plan, attachments:[], requisitions, field_reports:[], targets, audit_log };
+}
+const MOCK_DB = DEMO_MODE ? buildMockDb() : null;
+
+function mockFrom(table){
+  const rows = MOCK_DB[table] || (MOCK_DB[table] = []);
+  const st = { filters:[], op:'select', rec:null, orders:[], limitN:null, single:null };
+  const matches = row => st.filters.every(f=>{
+    if(f.t==='eq') return String(row[f.c])===String(f.v);
+    if(f.t==='in') return (f.v||[]).map(String).includes(String(row[f.c]));
+    if(f.t==='gte') return row[f.c]!=null && row[f.c] >= f.v;
+    if(f.t==='lte') return row[f.c]!=null && row[f.c] <= f.v;
+    return true;
+  });
+  function materialize(){
+    let r = rows.filter(matches);
+    for(let i=st.orders.length-1;i>=0;i--){ const [col,asc] = st.orders[i];
+      r = r.slice().sort((a,b)=>{ if(a[col]<b[col]) return asc?-1:1; if(a[col]>b[col]) return asc?1:-1; return 0; }); }
+    if(st.limitN) r = r.slice(0, st.limitN);
+    return r;
+  }
+  const b = {
+    select(){ return b; }, eq(c,v){ st.filters.push({t:'eq',c,v}); return b; }, in(c,v){ st.filters.push({t:'in',c,v}); return b; },
+    gte(c,v){ st.filters.push({t:'gte',c,v}); return b; }, lte(c,v){ st.filters.push({t:'lte',c,v}); return b; },
+    order(c,opts){ st.orders.push([c, !(opts && opts.ascending===false)]); return b; },
+    limit(n){ st.limitN = n; return b; },
+    insert(rec){ st.op='insert'; st.rec = Array.isArray(rec) ? rec : [rec]; return b; },
+    update(rec){ st.op='update'; st.rec = rec; return b; },
+    delete(){ st.op='delete'; return b; },
+    single(){ st.single='req'; return b; }, maybeSingle(){ st.single='opt'; return b; },
+    then(resolve, reject){
+      let result;
+      try{
+        if(st.op==='insert'){
+          const withIds = st.rec.map(r=>({ id:genId(), created_at:new Date().toISOString(), ...r }));
+          rows.push(...withIds);
+          result = { data: st.single ? withIds[0] : withIds, error:null };
+        } else if(st.op==='update'){
+          const m = materialize(); m.forEach(row=>Object.assign(row, st.rec));
+          result = { data: st.single ? (m[0]||null) : m, error:null };
+        } else if(st.op==='delete'){
+          const m = materialize(); m.forEach(row=>{ const i=rows.indexOf(row); if(i>=0) rows.splice(i,1); });
+          result = { data: m, error:null };
+        } else {
+          const r = materialize();
+          if(st.single==='req') result = { data: r[0]||null, error: r[0]?null:{message:'ไม่พบข้อมูล (โหมดพรีวิว)'} };
+          else if(st.single==='opt') result = { data: r[0]||null, error:null };
+          else result = { data: r, error:null };
+        }
+      }catch(e){ return reject ? reject(e) : Promise.reject(e); }
+      return Promise.resolve(result).then(resolve, reject);
+    }
+  };
+  return b;
+}
+function buildMockSupabase(){
+  const PLACEHOLDER_IMG = 'data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="140"><rect width="100%" height="100%" fill="%23EEF1F8"/><text x="50%" y="50%" font-size="13" text-anchor="middle" fill="%238592A8">รูปตัวอย่าง (โหมดพรีวิว)</text></svg>');
+  return {
+    from: mockFrom,
+    auth: {
+      getSession: async()=>({ data:{ session:{ access_token:'demo' } } }),
+      getUser: async()=>({ data:{ user:{ id:'demo-admin' } } }),
+      signInWithPassword: async()=>({ data:{ session:{ access_token:'demo' } }, error:null }),
+      signOut: async()=>{ location.reload(); },
+      updateUser: async()=>({ error:null }),
+    },
+    storage: { from(){ return {
+      upload: async()=>({ error:null }),
+      getPublicUrl: ()=>({ data:{ publicUrl: PLACEHOLDER_IMG } }),
+    }; } },
+    functions: { invoke: async()=>({ data:null, error:{ message:'ปิดใช้งานในโหมดพรีวิว (ไม่มีฐานข้อมูลจริงเชื่อมอยู่)' } }) },
+  };
+}
+const sb = DEMO_MODE ? buildMockSupabase() : supabase.createClient(SUPA_URL, SUPA_KEY);
 
 const ROLE_LABEL = {admin:'ผู้ดูแลระบบ', manager:'ผู้จัดการฝ่าย', pm:'ผู้จัดการโครงการ', eng:'วิศวกรคุมงาน', field:'ทีมงานหน้างาน', accountant:'ฝ่ายบัญชี', viewer:'ผู้ดูรายงาน'};
 const DIV_ICON = {pjcm:'⚡', pc:'🧱', en:'☀️'};
@@ -863,6 +1040,7 @@ function selectProject(id){ state.selProj = id; renderProjectsPage(); }
 async function renderProjectDetail(projId){
   const D = divCfg(state.ws);
   const { data: p } = await sb.from('projects').select('*').eq('id', projId).single();
+  if(!document.getElementById('projDetailHost')) return; // navigated away while loading
   if(!p){ document.getElementById('projDetailHost').innerHTML = '<div class="empty">ไม่พบโครงการ</div>'; return; }
   const [{data:months},{data:fin},{data:sc},{data:loss},{data:stk},{data:mile},{data:cost},{data:att}] = await Promise.all([
     sb.from('project_monthly').select('*').eq('project_id', projId).order('month', {ascending:false}),
@@ -916,6 +1094,7 @@ async function renderProjectDetail(projId){
       [['overview','📅 รายเดือน'],['fin','💰 การเงิน'],['scurve','📈 S-Curve'],['loss','⚠️ ความเสียหาย'],['stock','📦 สต็อก'],['att','📎 เอกสารแนบ']].map(t=>
         '<button class="btn btn-sm '+(state.projTab===t[0]?'btn-primary':'btn-ghost')+'" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="projTab(\''+t[0]+'\')">'+t[1]+'</button>').join('')+
     '</div><div id="projTabBody"></div></div>';
+  if(!document.getElementById('projDetailHost')) return; // navigated away while loading
   document.getElementById('projDetailHost').innerHTML = html;
   projTab(state.projTab||'overview');
 }
@@ -1023,6 +1202,7 @@ async function planDay(D){
   const { data: rows } = await sb.from('daily_plan').select('*').eq('division_id',state.ws)
     .gte('start_date', fetchFrom).lte('start_date', ymd(winEnd)).order('created_at');
   const body = document.getElementById('planBody');
+  if(!body) return; // user navigated away from Plan page before this fetch finished — don't crash writing into a gone element
 
   const byTeam = {};
   (state.cache.teams||[]).forEach(t=>{ byTeam[t.id] = []; }); // show every team as a row even with zero tasks
@@ -1124,6 +1304,7 @@ async function planMonth(D){
   const { data: rows } = await sb.from('daily_plan').select('team_id,plan_date').eq('division_id',state.ws).gte('plan_date',from).lte('plan_date',to);
   const teams = state.cache.teams;
   const body = document.getElementById('planBody');
+  if(!body) return; // user navigated away from Plan page before this fetch finished — don't crash writing into a gone element
   if(!teams.length){ body.innerHTML='<div class="card"><div class="empty">ยังไม่มีทีมงานในฝ่ายนี้</div></div>'; return; }
   const counts = {}; (rows||[]).forEach(r=>{ const m=+r.plan_date.slice(5,7); const key=r.team_id+'-'+m; counts[key]=(counts[key]||0)+1; });
   body.innerHTML = '<div class="card" style="padding:0;border-color:var(--line2);overflow:hidden">'+
@@ -1148,6 +1329,7 @@ async function planYear(D){
   const year = new Date().getFullYear();
   const rows = state.projects.filter(p=>p.division_id===state.ws && (p.start_date||p.end_date));
   const body = document.getElementById('planBody');
+  if(!body) return; // user navigated away from Plan page before this fetch finished — don't crash writing into a gone element
   if(!rows.length){ body.innerHTML='<div class="card"><div class="empty">ไม่มีโครงการที่ระบุวันเริ่ม/สิ้นสุด</div></div>'; return; }
   body.innerHTML = '<div class="card" style="padding:0;border-color:var(--line2);overflow:hidden">'+
     '<div style="display:grid;grid-template-columns:260px repeat(12,1fr);background:#F3F6FC;border-bottom:1px solid var(--line2)">'+
@@ -1468,6 +1650,7 @@ async function delProject(id){
  * MANGO SYNC
  * ============================================================ */
 async function openMangoSync(divId){
+  if(DEMO_MODE){ toast('ปิดใช้งานดึงข้อมูล Mango ในโหมดพรีวิว','err'); return; }
   document.getElementById('modalHost').innerHTML =
     '<div class="modal-bg"><div class="modal"><div class="modal-head"><span class="t">⬇️ ดึงจาก Mango</span>'+
     '<button class="modal-x" onclick="closeModal()">×</button></div>'+
@@ -1987,8 +2170,15 @@ async function renderAudit(){
     '</tbody></table></div></div></div>');
 }
 
-/* ---------- boot: restore session ---------- */
+/* ---------- boot: restore session (or skip straight in for DEMO_MODE) ---------- */
 (async function boot(){
+  if(DEMO_MODE){
+    state.session = { access_token:'demo' };
+    state.profile = MOCK_DB.profiles[0];
+    state.divisions = MOCK_DB.divisions;
+    enterApp();
+    return;
+  }
   const { data:{ session } } = await sb.auth.getSession();
   if(session){ state.session = session; await loadProfileAndEnter(); }
 })();
