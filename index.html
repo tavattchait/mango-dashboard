@@ -260,7 +260,7 @@ const SUPA_URL = 'https://ryesfzzsolnsarkkibwa.supabase.co';
 const SUPA_KEY = 'sb_publishable__LTMHdZUUj03iPHsAy3Lfw_7k_2e9ZL';
 const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
 
-const ROLE_LABEL = {admin:'ผู้ดูแลระบบ', manager:'ผู้จัดการฝ่าย', pm:'ผู้จัดการโครงการ', accountant:'ฝ่ายบัญชี', viewer:'ผู้ดูรายงาน'};
+const ROLE_LABEL = {admin:'ผู้ดูแลระบบ', manager:'ผู้จัดการฝ่าย', pm:'ผู้จัดการโครงการ', eng:'วิศวกรคุมงาน', field:'ทีมงานหน้างาน', accountant:'ฝ่ายบัญชี', viewer:'ผู้ดูรายงาน'};
 const DIV_ICON = {pjcm:'⚡', pc:'🧱', en:'☀️'};
 const DIV_PALETTE = { pjcm:{acc:'#2F6FED',acc2:'#1E4FC4',soft:'#EAF1FE'}, en:{acc:'#0D9488',acc2:'#0B7A6C',soft:'#E4F7F3'}, pc:{acc:'#D97706',acc2:'#B45309',soft:'#FDF1E0'} };
 const CO_CFG = {id:'company', name:'WRC — ภาพรวมองค์กร', tagline:'ศูนย์บัญชาการทุกฝ่ายงาน', icon:'🏢', acc:'#4338CA', acc2:'#3730A3', soft:'#EBEFF8'};
@@ -431,7 +431,7 @@ function subnavConfig(){
     return tabs;
   }
   const tabs=[['overview','ภาพรวมฝ่าย'],['projects','โครงการ']];
-  if(isAdmin||role==='pm'||role==='manager'){ tabs.push(['plan','วางแผน'],['team','ทีม']); }
+  if(isAdmin||['pm','manager','eng','field'].includes(role)){ tabs.push(['plan','วางแผน'],['team','ทีม'],['req','เบิกของ']); }
   if(isAdmin||role==='pm'||role==='manager'||role==='accountant'){ tabs.push(['cost','ต้นทุน']); }
   return tabs;
 }
@@ -441,6 +441,14 @@ function canWrite(divisionId){
   if((r==='pm'||r==='manager') && state.profile.division_id===divisionId) return true;
   return false;
 }
+// field/eng ส่งเบิกของ+รายงานผลหน้างานได้ แต่แก้ไขแผน/โครงการไม่ได้ (นั่นยังเป็นของ pm/manager/admin เท่านั้น — ดู canWrite())
+function canSubmitField(divisionId){
+  const r = state.profile.role;
+  if(r==='admin') return true;
+  if(['pm','manager','eng','field'].includes(r) && state.profile.division_id===divisionId) return true;
+  return false;
+}
+function canApproveReq(){ return ['admin','pm','manager'].includes(state.profile.role); }
 function toggleMenu(name){ state.openMenu = state.openMenu===name?null:name; renderShell(); }
 function closeMenu(){ state.openMenu=null; renderShell(); }
 function goWs(id){ state.ws=id; state.sub='overview'; state.selProj=null; state.searchQuery=''; go(); }
@@ -472,6 +480,7 @@ async function go(){
       else if(sub==='plan') await renderPlanPage();
       else if(sub==='cost') await renderCostPage();
       else if(sub==='team') await renderTeamPage();
+      else if(sub==='req') await renderRequisitionsPage();
       else if(sub==='form') await renderProjectForm();
     }
   }catch(ex){ content('<div class="card"><div class="empty">เกิดข้อผิดพลาด: '+esc(ex.message)+'</div></div>'); }
@@ -1086,6 +1095,7 @@ async function planDay(D){
       labelCol += '<div style="height:46px;display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 4px" title="'+esc(t.task)+'">'+
         '<div style="flex:1;min-width:0;padding-right:8px"><div style="font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(t.task)+'</div>'+
         '<div style="font-size:10px;color:var(--muted2);margin-top:1px">'+esc(proj?proj.code:'-')+' · '+thDate(t.start_date)+'</div></div>'+
+        (canSubmitField(state.ws) ? '<button class="btn btn-ghost btn-sm" style="flex-shrink:0;margin-right:6px;padding:4px 8px;font-size:10.5px" onclick="openFieldReport(\''+t.id+'\',\''+(t.project_id||'')+'\',\''+(t.team_id||'')+'\')">📝 รายงานผล</button>' : '')+
         '<span style="font-size:11px;font-weight:700;color:'+(pct>=100?'#0D9488':(pct>0?tc:'#94A3B8'))+';font-family:var(--disp);flex-shrink:0">'+pct+'%</span></div>';
       let cells2=''; for(let i=0;i<N;i++) cells2+='<div style="background:'+(days[i].isWeekend?'var(--soft)':'transparent')+';height:100%;border-radius:8px"></div>';
       const todayIdx = days.findIndex(d=>d.isToday);
@@ -1226,6 +1236,128 @@ async function renderTeamPage(){
         '</div>';
     }).join('')+'</div>')+'</div>';
   content(html);
+}
+
+/* ============================================================
+ * REQUISITIONS — เบิกของ/รถ/เครื่องมือ (field/eng ส่ง, pm/manager/admin อนุมัติ)
+ * ============================================================ */
+const REQ_KIND_ICON = {'รถ':'🚛','เครื่องมือ':'🛠️','วัสดุ':'📦'};
+function reqStatusPill(s){
+  const map={'รออนุมัติ':{c:'#D97706',bg:'var(--amber-soft)'},'อนุมัติ':{c:'#0D9488',bg:'var(--teal-soft)'},'ปฏิเสธ':{c:'#DC2626',bg:'var(--red-soft)'}};
+  const m=map[s]||map['รออนุมัติ'];
+  return '<span class="pill" style="color:'+m.c+';background:'+m.bg+'">'+esc(s)+'</span>';
+}
+async function renderRequisitionsPage(){
+  const D = divCfg(state.ws);
+  await loadAllProjects();
+  const projIds = state.projects.filter(p=>p.division_id===state.ws).map(p=>p.id);
+  const { data: rows, error } = await sb.from('requisitions').select('*').in('project_id', projIds.length?projIds:['00000000-0000-0000-0000-000000000000']).order('created_at',{ascending:false});
+  if(error){ content('<div class="page"><div class="card"><div class="empty">'+esc(error.message)+'<br><br>ถ้าเห็นข้อความ "relation \\"requisitions\\" does not exist" แปลว่ายังไม่ได้รัน schema_fieldwork.sql ในฐานข้อมูล</div></div></div>'); return; }
+  state.cache.reqRows = rows||[];
+  const pending = (rows||[]).filter(r=>r.status==='รออนุมัติ').length;
+  let html = '<div class="page wide">'+
+    '<div class="grid g3" style="margin-bottom:14px">'+
+      kpi('รออนุมัติ', pending, 'รายการ')+
+      kpi('อนุมัติแล้ว', (rows||[]).filter(r=>r.status==='อนุมัติ').length, 'รายการ')+
+      kpi('ทั้งหมด', (rows||[]).length, 'รายการ')+
+    '</div>'+
+    (canSubmitField(state.ws) ? '<div style="margin-bottom:14px"><button class="btn btn-primary btn-sm" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="openRequisition()">+ ขอเบิกของ/รถ/เครื่องมือ</button></div>' : '')+
+    '<div class="card" style="padding:0;border-color:var(--line2);overflow:hidden">'+
+    (!rows||!rows.length ? '<div class="empty">ยังไม่มีรายการเบิก</div>' :
+    '<div class="table-wrap" style="border:none;border-radius:0"><table><thead><tr><th>วันที่</th><th>โครงการ</th><th>ประเภท</th><th>รายการ</th><th>เหตุผล</th><th>สถานะ</th><th></th></tr></thead><tbody>'+
+    rows.map(r=>{ const proj=state.projects.find(p=>p.id===r.project_id);
+      return '<tr><td>'+thDate(r.when_date)+'</td><td>'+esc(proj?proj.code:'-')+'</td>'+
+      '<td>'+(REQ_KIND_ICON[r.kind]||'')+' '+esc(r.kind)+'</td><td>'+esc(r.item)+'</td><td>'+esc(r.reason||'-')+'</td>'+
+      '<td>'+reqStatusPill(r.status)+'</td>'+
+      '<td>'+(r.status==='รออนุมัติ'&&canApproveReq() ?
+        '<button class="btn btn-primary btn-sm" style="--acc:var(--teal);--acc2:#14b8a6" onclick="setReqStatus(\''+r.id+'\',\'อนุมัติ\')">อนุมัติ</button> '+
+        '<button class="btn btn-ghost btn-sm" onclick="setReqStatus(\''+r.id+'\',\'ปฏิเสธ\')">ปฏิเสธ</button>' : '')+'</td></tr>';
+    }).join('')+'</tbody></table></div>')+
+    '</div></div>';
+  content(html);
+}
+function openRequisition(){
+  const projOpts = state.projects.filter(p=>p.division_id===state.ws).map(p=>'<option value="'+p.id+'">'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
+  const teamOpts = (state.cache.teams||[]).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
+    '<div class="modal-head"><span class="t">📋 ขอเบิกของ/รถ/เครื่องมือ</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body">'+
+      '<div class="field"><label>โครงการ</label><select id="rq_proj">'+projOpts+'</select></div>'+
+      '<div class="row r2"><div class="field"><label>ประเภท</label><select id="rq_kind"><option>วัสดุ</option><option>เครื่องมือ</option><option>รถ</option></select></div>'+
+      '<div class="field"><label>ทีม</label><select id="rq_team">'+(teamOpts||'<option value="">— ไม่ระบุ —</option>')+'</select></div></div>'+
+      '<div class="field"><label>รายการที่ขอเบิก</label><input id="rq_item" placeholder="เช่น รถเครน 10 ตัน"></div>'+
+      '<div class="field"><label>เหตุผล</label><input id="rq_reason" placeholder="เช่น ยกท่อลงบ่อ MH.03"></div>'+
+      '<div class="row r2"><div class="field"><label>วันที่ต้องการใช้</label><input id="rq_when" type="date"></div><div class="field"><label>รายละเอียดเพิ่มเติม</label><input id="rq_detail"></div></div>'+
+    '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn btn-primary" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveRequisition()">ส่งคำขอ</button></div></div></div>';
+  document.getElementById('rq_when').value = new Date().toISOString().slice(0,10);
+}
+async function saveRequisition(){
+  const g=k=>(document.getElementById(k)||{}).value;
+  const item = g('rq_item').trim();
+  if(!item){ toast('กรอกรายการที่ขอเบิก','err'); return; }
+  const { data:{ user } } = await sb.auth.getUser();
+  const rec = { project_id:g('rq_proj'), division_id:state.ws, team_id:g('rq_team')||null, kind:g('rq_kind'),
+    item, reason:g('rq_reason'), detail:g('rq_detail'), when_date:g('rq_when'), created_by:user.id };
+  const { error } = await sb.from('requisitions').insert(rec);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('ส่งคำขอเบิกเรียบร้อย รออนุมัติ','ok'); renderRequisitionsPage();
+}
+async function setReqStatus(id, status){
+  const rec = { status };
+  if(status==='อนุมัติ'){ rec.approved_by = (await sb.auth.getUser()).data.user.id; rec.approved_at = new Date().toISOString(); }
+  const { error } = await sb.from('requisitions').update(rec).eq('id', id);
+  if(error){ toast(error.message,'err'); return; }
+  toast(status+'เรียบร้อย','ok'); renderRequisitionsPage();
+}
+
+/* ============================================================
+ * FIELD REPORTS — รายงานผลหลังทำงานจริง (พร้อมรูป) เปิดจากปุ่มในหน้า Plan/Day
+ * ============================================================ */
+function openFieldReport(dailyPlanId, projectId, teamId){
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
+    '<div class="modal-head"><span class="t">📝 รายงานผลหลังทำงาน</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body">'+
+      '<div class="row r2"><div class="field"><label>เวลาเริ่ม</label><input id="fr_start" type="time"></div><div class="field"><label>เวลาเลิก</label><input id="fr_end" type="time"></div></div>'+
+      '<div class="row r3"><div class="field"><label>คนงาน (คน)</label><input id="fr_labor" type="number" value="0"></div>'+
+      '<div class="field"><label>ผู้ควบคุมงาน (คน)</label><input id="fr_supervise" type="number" value="0"></div>'+
+      '<div class="field"><label>รวมทั้งหมด (คน)</label><input id="fr_total" type="number" value="0"></div></div>'+
+      '<div class="row r2"><div class="field"><label>สภาพอากาศ</label><select id="fr_weather"><option>แจ่มใส</option><option>ฝนตก</option><option>ฝนตกบางช่วง</option><option>เมฆมาก</option></select></div>'+
+      '<div class="field"><label>ปริมาณงานที่ทำได้</label><input id="fr_qty" type="number" step="0.01"></div></div>'+
+      '<div class="field"><label>หน่วย</label><input id="fr_unit" placeholder="เช่น เมตร, บ่อ"></div>'+
+      '<div class="field"><label>รายละเอียด</label><textarea id="fr_detail" rows="2"></textarea></div>'+
+      '<div class="field"><label>ปัญหาที่พบ (ถ้ามี)</label><textarea id="fr_problem" rows="2"></textarea></div>'+
+      '<div class="row r2"><div class="field"><label>ความรุนแรง</label><select id="fr_severity"><option value="">— ไม่มีปัญหา —</option><option>น้อย</option><option>ปานกลาง</option><option>มาก</option></select></div>'+
+      '<div class="field"><label>ต้องการความช่วยเหลือ</label><input id="fr_help"></div></div>'+
+      '<div class="field"><label>รูปถ่ายหน้างาน (เลือกได้หลายรูป)</label><input id="fr_photos" type="file" accept="image/*" multiple></div>'+
+    '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn btn-primary" id="fr_save" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveFieldReport(\''+(dailyPlanId||'')+'\',\''+(projectId||'')+'\',\''+(teamId||'')+'\')">บันทึกรายงาน</button></div></div></div>';
+}
+async function saveFieldReport(dailyPlanId, projectId, teamId){
+  const g=k=>(document.getElementById(k)||{}).value;
+  const btn = document.getElementById('fr_save'); btn.disabled=true; btn.textContent='กำลังบันทึก...';
+  try{
+    const { data:{ user } } = await sb.auth.getUser();
+    const files = (document.getElementById('fr_photos').files)||[];
+    const photoUrls = [];
+    for(const file of files){
+      const path = (projectId||'misc')+'/'+Date.now()+'_'+file.name;
+      const { error: upErr } = await sb.storage.from('field-photos').upload(path, file);
+      if(upErr){ toast('อัปโหลดรูปไม่สำเร็จ: '+upErr.message,'err'); continue; }
+      const { data: pub } = sb.storage.from('field-photos').getPublicUrl(path);
+      photoUrls.push(pub.publicUrl);
+    }
+    const rec = { daily_plan_id: dailyPlanId||null, project_id: projectId||null, team_id: teamId||null, division_id: state.ws,
+      time_start:g('fr_start'), time_end:g('fr_end'), labor_count:+g('fr_labor')||0, supervise_count:+g('fr_supervise')||0,
+      total_people:+g('fr_total')||0, weather:g('fr_weather'), qty_done:+g('fr_qty')||0, unit:g('fr_unit'),
+      detail:g('fr_detail'), problem:g('fr_problem'), severity:g('fr_severity')||null, help_needed:g('fr_help'),
+      photos: photoUrls, submitted_by: user.id };
+    const { error } = await sb.from('field_reports').insert(rec);
+    if(error){ toast(error.message,'err'); return; }
+    closeModal(); toast('บันทึกรายงานผลเรียบร้อย','ok');
+  } finally { btn.disabled=false; btn.textContent='บันทึกรายงาน'; }
 }
 
 /* ============================================================
@@ -1769,7 +1901,7 @@ async function renderUsers(){
     }).join('')+'</tbody></table></div></div></div>');
 }
 function openUserCreate(){
-  const roleOpts=['viewer','pm','manager','accountant','admin'].map(r=>'<option value="'+r+'">'+ROLE_LABEL[r]+'</option>').join('');
+  const roleOpts=['viewer','field','eng','pm','manager','accountant','admin'].map(r=>'<option value="'+r+'">'+ROLE_LABEL[r]+'</option>').join('');
   const deptOpts='<option value="">— ไม่ระบุ —</option>'+state.divisions.map(d=>'<option value="'+d.id+'">'+esc(d.name)+'</option>').join('');
   document.getElementById('modalHost').innerHTML =
     '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
@@ -1803,7 +1935,7 @@ async function saveUserCreate(){
   finally{ btn.disabled=false; btn.textContent='สร้างผู้ใช้'; }
 }
 function openUserEdit(u){
-  const roleOpts=['admin','manager','pm','accountant','viewer'].map(r=>'<option value="'+r+'"'+(u.role===r?' selected':'')+'>'+ROLE_LABEL[r]+'</option>').join('');
+  const roleOpts=['admin','manager','pm','eng','field','accountant','viewer'].map(r=>'<option value="'+r+'"'+(u.role===r?' selected':'')+'>'+ROLE_LABEL[r]+'</option>').join('');
   const deptOpts='<option value="">— ไม่ระบุ —</option>'+state.divisions.map(d=>'<option value="'+d.id+'"'+(u.division_id===d.id?' selected':'')+'>'+esc(d.name)+'</option>').join('');
   document.getElementById('modalHost').innerHTML=
     '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
