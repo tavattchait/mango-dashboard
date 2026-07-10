@@ -25,9 +25,16 @@
   --mono:"IBM Plex Mono","SFMono-Regular",Consolas,monospace;
   --shadow:0 1px 2px rgba(16,26,51,.05),0 8px 24px rgba(16,26,51,.07);
   --sidebar:260px;
+  --rail:78px;
+  --glass:rgba(255,255,255,.72);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:var(--sans);background:var(--ground);color:var(--ink);font-size:14px;line-height:1.55}
+body{font-family:var(--sans);color:var(--ink);font-size:14px;line-height:1.55;
+  background:
+    radial-gradient(900px 500px at 8% -8%, rgba(13,148,136,.12), transparent 60%),
+    radial-gradient(800px 500px at 100% 0%, rgba(47,111,237,.10), transparent 55%),
+    var(--ground);
+  background-attachment:fixed}
 button,input,select,textarea{font-family:inherit;font-size:14px}
 button{cursor:pointer}
 .hidden{display:none!important}
@@ -63,47 +70,57 @@ button{cursor:pointer}
 .login-err{background:var(--red-soft);color:#991b1b;border:1px solid #f7c9c9;border-radius:9px;
   padding:10px 12px;font-size:12.5px;margin-bottom:14px}
 
-/* ---------- Shell ---------- */
+/* ---------- Shell (icon-rail + glass) ---------- */
 #appView{display:flex;min-height:100vh}
-.sidebar{width:var(--sidebar);background:var(--panel);color:var(--ink);border-right:1px solid var(--line);
-  position:fixed;top:0;bottom:0;left:0;display:flex;flex-direction:column;z-index:20}
-.sb-brand{display:flex;align-items:center;gap:12px;padding:22px 22px 18px;border-bottom:1px solid var(--line)}
-.sb-brand img{width:36px;height:36px;object-fit:contain}
-.sb-brand .t{font-family:var(--disp);font-size:16.5px;font-weight:700;letter-spacing:-.01em;color:var(--ink)}
-.sb-brand .s{font-size:10px;color:var(--muted2);font-family:var(--mono);letter-spacing:.05em}
-.sb-nav{flex:1;overflow-y:auto;padding:10px 14px}
-.sb-group-t{font-size:10px;font-weight:700;letter-spacing:.09em;color:var(--muted2);text-transform:uppercase;padding:16px 10px 7px}
-.sb-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;color:var(--ink2);
-  font-weight:500;font-size:13.5px;cursor:pointer;transition:background .12s,color .12s;margin-bottom:1px}
-.sb-item .ico{width:17px;text-align:center;font-size:14px;opacity:.85}
+.sidebar{width:var(--rail);background:var(--glass);backdrop-filter:blur(16px) saturate(160%);
+  -webkit-backdrop-filter:blur(16px) saturate(160%);color:var(--ink);border-right:1px solid var(--line);
+  position:fixed;top:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;z-index:20}
+.sb-brand{display:flex;flex-direction:column;align-items:center;gap:2px;padding:18px 8px 14px;border-bottom:1px solid var(--line);width:100%}
+.sb-brand img{width:32px;height:32px;object-fit:contain}
+.sb-brand .t{display:none}
+.sb-brand .s{display:none}
+.sb-nav{flex:1;overflow-y:auto;overflow-x:visible;padding:12px 0;width:100%;display:flex;flex-direction:column;align-items:center;gap:2px}
+.sb-group-t{display:none}
+.sb-item{position:relative;display:flex;align-items:center;justify-content:center;width:52px;height:48px;border-radius:13px;color:var(--muted);
+  font-weight:600;font-size:13.5px;cursor:pointer;transition:background .12s,color .12s;margin-bottom:1px}
+.sb-item .ico{font-size:18px}
 .sb-item:hover{background:var(--soft);color:var(--ink)}
-.sb-item.active{background:var(--teal-soft);color:var(--teal);font-weight:700}
-.sb-item.active .ico{opacity:1}
-.sb-div-list{padding:2px 0}
-.sb-div-item{display:flex;align-items:center;gap:9px;padding:8px 12px;border-radius:9px;color:var(--ink2);font-size:13px;cursor:pointer;margin-bottom:1px}
-.sb-div-item:hover{background:var(--soft);color:var(--ink)}
-.sb-div-item.active{background:var(--soft);color:var(--ink);font-weight:700;box-shadow:inset 2px 0 0 var(--teal)}
-.sb-div-dot{width:8px;height:8px;border-radius:50%;flex:none}
-.sb-user{border-top:1px solid var(--line);padding:14px}
-.sb-user-row{display:flex;align-items:center;gap:10px;padding:6px 8px}
-.sb-avatar{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--teal),#0891b2);
-  color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none}
-.sb-user-info{flex:1;min-width:0}
-.sb-user-info .n{font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sb-user-info .r{font-size:10.5px;color:var(--muted)}
-.sb-user-menu{display:flex;gap:6px;margin-top:9px}
-.sb-user-menu .btn{flex:1;font-size:11.5px;padding:7px}
+.sb-item.active{background:linear-gradient(135deg,var(--teal),#0891b2);color:#fff;box-shadow:0 6px 16px rgba(13,148,136,.35)}
+.sb-item[title]:hover::after{content:attr(title);position:absolute;left:100%;top:50%;transform:translateY(-50%);margin-left:10px;
+  background:var(--ink);color:#fff;padding:6px 11px;border-radius:8px;font-size:12px;font-weight:600;white-space:nowrap;z-index:50;box-shadow:0 8px 20px rgba(0,0,0,.25)}
+.sb-div-list{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0;margin:6px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);width:100%}
+.sb-div-item{position:relative;display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;color:var(--ink2);font-size:15px;cursor:pointer;margin-bottom:1px}
+.sb-div-item:hover{background:var(--soft)}
+.sb-div-item.active{box-shadow:inset 0 0 0 2px var(--teal);background:var(--teal-soft)}
+.sb-div-dot{display:none}
+.sb-div-item[title]:hover::after{content:attr(title);position:absolute;left:100%;top:50%;transform:translateY(-50%);margin-left:10px;
+  background:var(--ink);color:#fff;padding:6px 11px;border-radius:8px;font-size:12px;font-weight:600;white-space:nowrap;z-index:50;box-shadow:0 8px 20px rgba(0,0,0,.25)}
+.sb-user{border-top:1px solid var(--line);padding:12px 0;width:100%;display:flex;flex-direction:column;align-items:center;gap:8px}
+.sb-user-row{display:flex}
+.sb-avatar{width:36px;height:36px;border-radius:11px;background:linear-gradient(135deg,var(--teal),#0891b2);
+  color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none;cursor:pointer}
+.sb-user-info{display:none}
+.sb-user-menu{display:flex;flex-direction:column;gap:6px;width:100%;align-items:center}
+.sb-user-menu .btn{width:38px;height:34px;padding:0;font-size:14px;border-radius:9px}
 .sb-user-menu .btn-ghost{background:var(--soft);border-color:var(--line);color:var(--ink2)}
 .sb-user-menu .btn-ghost:hover{background:#fff}
 
-.main{flex:1;margin-left:var(--sidebar);min-width:0;display:flex;flex-direction:column}
-.topbar{background:var(--panel);border-bottom:1px solid var(--line);padding:16px 30px;
-  display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10}
+.main{flex:1;margin-left:var(--rail);min-width:0;display:flex;flex-direction:column}
+.topbar{background:var(--glass);backdrop-filter:blur(16px) saturate(160%);-webkit-backdrop-filter:blur(16px) saturate(160%);
+  border-bottom:1px solid var(--line);padding:16px 30px;
+  display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10;flex-wrap:wrap}
 .crumb{font-family:var(--mono);font-size:11px;color:var(--muted2);letter-spacing:.02em}
 .page-title{font-family:var(--disp);font-size:20px;font-weight:700;letter-spacing:-.01em;margin-top:2px}
 .topbar .spacer{flex:1}
 .content{padding:28px 30px 70px;flex:1}
 .mobile-toggle{display:none;background:var(--soft);border:1px solid var(--line);border-radius:9px;width:38px;height:38px;font-size:17px}
+
+/* pill sub-nav */
+.subnav{display:flex;gap:6px;flex-wrap:wrap;width:100%;padding-top:2px}
+.subnav .pill-tab{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;font-size:12.5px;font-weight:700;
+  color:var(--muted);background:transparent;border:1px solid transparent;cursor:pointer;transition:all .12s}
+.subnav .pill-tab:hover{background:var(--soft);color:var(--ink)}
+.subnav .pill-tab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
 
 /* ---------- Cards ---------- */
 .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 22px;box-shadow:var(--shadow)}
@@ -255,6 +272,7 @@ td.num,th.num{text-align:right}
       <div><div class="crumb" id="crumb">WRC · ERP</div><div class="page-title" id="pageTitle">ภาพรวมองค์กร</div></div>
       <div class="spacer"></div>
       <div id="topActions"></div>
+      <div class="subnav hidden" id="subnav"></div>
     </div>
     <div class="content" id="content"></div>
   </div>
@@ -355,27 +373,23 @@ function enterApp(){
 function renderNav(){
   const role = state.profile.role;
   const isAdmin = role === 'admin';
-  let html = '<div class="sb-group-t">รายงาน</div>'+
-    '<div class="sb-item" data-page="org" onclick="go(\'org\')"><span class="ico">🏢</span>ภาพรวมองค์กร</div>'+
+  let html = '<div class="sb-item" data-page="org" title="ภาพรวมองค์กร" onclick="go(\'org\')"><span class="ico">🏢</span></div>'+
     '<div class="sb-div-list">'+ state.divisions.map(d=>
-      '<div class="sb-div-item" data-div="'+d.id+'" onclick="go(\'division\',\''+d.id+'\')">'+
-        '<span class="sb-div-dot" style="background:'+esc(d.accent_color||'#888')+'"></span>'+esc(d.name)+'</div>'
+      '<div class="sb-div-item" data-div="'+d.id+'" title="'+esc(d.name)+'" onclick="go(\'division\',\''+d.id+'\')">'+(DIV_ICON[d.id]||'📌')+'</div>'
     ).join('') + '</div>';
   const canOps = isAdmin || role==='pm' || role==='manager' || role==='accountant';
-  html += '<div class="sb-group-t">งาน</div>'+
-    '<div class="sb-item" data-page="projects" onclick="go(\'projects\')"><span class="ico">📁</span>ทะเบียนโครงการ</div>';
+  html += '<div class="sb-item" data-page="projects" title="ทะเบียนโครงการ" onclick="go(\'projects\')"><span class="ico">📁</span></div>';
   if(canOps){
-    html += '<div class="sb-item" data-page="cost-entries" onclick="go(\'cost-entries\')"><span class="ico">🧾</span>บันทึกต้นทุน</div>';
+    html += '<div class="sb-item" data-page="cost-entries" title="บันทึกต้นทุน" onclick="go(\'cost-entries\')"><span class="ico">🧾</span></div>';
   }
   if(isAdmin || role==='pm' || role==='manager'){
-    html += '<div class="sb-item" data-page="daily-plan" onclick="go(\'daily-plan\')"><span class="ico">📅</span>แผนรายวัน</div>'+
-      '<div class="sb-item" data-page="teams" onclick="go(\'teams\')"><span class="ico">🧑‍🤝‍🧑</span>ทีมงาน</div>';
+    html += '<div class="sb-item" data-page="plan" title="แผนงาน" onclick="go(\'plan\')"><span class="ico">📅</span></div>'+
+      '<div class="sb-item" data-page="teams" title="ทีมงาน" onclick="go(\'teams\')"><span class="ico">🧑‍🤝‍🧑</span></div>';
   }
   if(isAdmin){
-    html += '<div class="sb-group-t">ผู้ดูแลระบบ</div>'+
-      '<div class="sb-item" data-page="users" onclick="go(\'users\')"><span class="ico">👥</span>ผู้ใช้งาน</div>'+
-      '<div class="sb-item" data-page="targets" onclick="go(\'targets\')"><span class="ico">🎯</span>เป้าหมายบริษัท</div>'+
-      '<div class="sb-item" data-page="audit" onclick="go(\'audit\')"><span class="ico">🗒️</span>ประวัติการใช้งาน</div>';
+    html += '<div class="sb-item" data-page="users" title="ผู้ใช้งาน" onclick="go(\'users\')"><span class="ico">👥</span></div>'+
+      '<div class="sb-item" data-page="targets" title="เป้าหมายบริษัท" onclick="go(\'targets\')"><span class="ico">🎯</span></div>'+
+      '<div class="sb-item" data-page="audit" title="ประวัติการใช้งาน" onclick="go(\'audit\')"><span class="ico">🗒️</span></div>';
   }
   document.getElementById('sbNav').innerHTML = html;
 }
@@ -385,10 +399,17 @@ function markActiveNav(page, divId){
     el.classList.toggle('active', !!match);
   });
 }
+function renderSubnav(tabs, active, onClick){
+  const el = document.getElementById('subnav');
+  if(!tabs || !tabs.length){ el.classList.add('hidden'); el.innerHTML=''; return; }
+  el.classList.remove('hidden');
+  el.innerHTML = tabs.map(t=>'<button class="pill-tab'+(t[0]===active?' active':'')+'" onclick="'+onClick+'(\''+t[0]+'\')">'+esc(t[1])+'</button>').join('');
+}
 async function go(page, arg){
   state.page = page;
   document.getElementById('topActions').innerHTML = '';
   document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('subnav').classList.add('hidden');
   content('<div class="empty">กำลังโหลด…</div>');
   if(page==='org'){ setHead('WRC · ERP','ภาพรวมองค์กร'); markActiveNav('org'); await renderOrg(); }
   else if(page==='division'){ state.selDiv = arg; const d=state.divisions.find(x=>x.id===arg); setHead('WRC · ERP · '+(d?d.name:''), d?d.name:'ฝ่าย'); markActiveNav('division',arg); await renderDivision(arg); }
@@ -398,7 +419,7 @@ async function go(page, arg){
   else if(page==='targets'){ setHead('WRC · ERP · ผู้ดูแลระบบ','เป้าหมายบริษัท'); markActiveNav('targets'); await renderTargets(); }
   else if(page==='audit'){ setHead('WRC · ERP · ผู้ดูแลระบบ','ประวัติการใช้งาน'); markActiveNav('audit'); await renderAudit(); }
   else if(page==='cost-entries'){ setHead('WRC · ERP','บันทึกต้นทุน'); markActiveNav('cost-entries'); await renderCostEntries(); }
-  else if(page==='daily-plan'){ setHead('WRC · ERP','แผนรายวัน'); markActiveNav('daily-plan'); await renderDailyPlan(); }
+  else if(page==='plan'){ setHead('WRC · ERP','แผนงาน'); markActiveNav('plan'); await renderPlan(arg||state.cache.planView||'day'); }
   else if(page==='teams'){ setHead('WRC · ERP','ทีมงาน'); markActiveNav('teams'); await renderTeams(); }
 }
 function setHead(crumb,title){ document.getElementById('crumb').textContent=crumb; document.getElementById('pageTitle').textContent=title; }
@@ -1144,15 +1165,24 @@ async function saveCostEntry(){
 }
 
 /* ============================================================
- * DAILY PLAN + TEAMS (เฟส 4)
+ * PLAN — แผนงาน: Day (Gantt รายวัน) / Month (Capacity heatmap) / Year (Roadmap) — เฟส 4
  * ============================================================ */
-async function renderDailyPlan(){
-  const myDiv = state.profile.role==='admin' ? (state.divisions[0]||{}).id : state.profile.division_id;
+async function renderPlan(view){
+  state.cache.planView = view;
+  document.getElementById('topActions').innerHTML = view==='day' ? '<button class="btn btn-primary btn-sm" onclick="openDailyTask()">+ เพิ่มงาน</button>' : '';
+  renderSubnav([['day','รายวัน'],['month','รายเดือน'],['year','รายปี']], view, 'switchPlanView');
   const projects = await loadAllProjects(); state.projects = projects;
   const { data: teams } = await sb.from('teams').select('*').order('name');
   state.cache.teams = teams||[];
+  if(view==='day') await planDay();
+  else if(view==='month') await planMonth();
+  else await planYear();
+}
+function switchPlanView(v){ go('plan', v); }
+
+async function planDay(){
+  const myDiv = state.profile.role==='admin' ? (state.divisions[0]||{}).id : state.profile.division_id;
   const today = new Date().toISOString().slice(0,10);
-  document.getElementById('topActions').innerHTML = '<button class="btn btn-primary btn-sm" onclick="openDailyTask()">+ เพิ่มงาน</button>';
   content('<div class="card"><div class="row r2" style="margin-bottom:16px">'+
     '<div class="field light"><label>ฝ่าย</label><select id="dp_div" onchange="loadDailyPlanFor()">'+
       state.divisions.map(d=>'<option value="'+d.id+'"'+(d.id===myDiv?' selected':'')+'>'+esc(d.name)+'</option>').join('')+'</select></div>'+
@@ -1166,12 +1196,82 @@ async function loadDailyPlanFor(){
   const { data: rows } = await sb.from('daily_plan').select('*').eq('division_id',div).eq('plan_date',date).order('created_at');
   const body = document.getElementById('dp_body');
   if(!rows||!rows.length){ body.innerHTML='<div class="empty">ยังไม่มีงานมอบหมายวันนี้</div>'; return; }
-  body.innerHTML = '<div class="table-wrap"><table><thead><tr><th>ทีม</th><th>โครงการ</th><th>งาน</th><th>เริ่ม</th><th class="num">ระยะ(วัน)</th><th class="num">% ความคืบหน้า</th></tr></thead><tbody>'+
-    rows.map(r=>{ const team=state.cache.teams.find(t=>t.id===r.team_id); const proj=state.projects.find(p=>p.id===r.project_id);
+  body.innerHTML = '<div class="table-wrap"><table><thead><tr><th>ทีม</th><th>โครงการ</th><th>งาน</th><th>เริ่ม</th><th class="num">ระยะ(วัน)</th><th style="min-width:160px">ความคืบหน้า</th></tr></thead><tbody>'+
+    rows.map(r=>{ const team=state.cache.teams.find(t=>t.id===r.team_id); const proj=state.projects.find(p=>p.id===r.project_id); const pct=Math.max(0,Math.min(100,+r.pct||0));
       return '<tr><td>'+esc(team?team.name:'-')+'</td><td>'+esc(proj?proj.code:'-')+'</td><td>'+esc(r.task)+'</td>'+
-        '<td>'+thDate(r.start_date)+'</td><td class="num tnum">'+(r.duration||'-')+'</td><td class="num tnum">'+(r.pct||0)+'%</td></tr>';
+        '<td>'+thDate(r.start_date)+'</td><td class="num tnum">'+(r.duration||'-')+'</td>'+
+        '<td><div style="background:var(--soft);border-radius:999px;height:9px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,var(--teal),#14b8a6)"></div></div>'+
+        '<div style="font-size:10.5px;color:var(--muted);margin-top:3px" class="tnum">'+pct+'%</div></td></tr>';
     }).join('')+'</tbody></table></div>';
 }
+
+/* Month: capacity heatmap — ทีมงาน × 12 เดือน, สีตามจำนวนงานที่มอบหมาย */
+async function planMonth(){
+  const myDiv = state.profile.role==='admin' ? (state.divisions[0]||{}).id : state.profile.division_id;
+  const year = state.cache.planYear || new Date().getFullYear();
+  const divOpts = state.divisions.map(d=>'<option value="'+d.id+'"'+(d.id===myDiv?' selected':'')+'>'+esc(d.name)+'</option>').join('');
+  content('<div class="card"><div class="row r2" style="margin-bottom:16px">'+
+    '<div class="field light"><label>ฝ่าย</label><select id="pm_div" onchange="loadPlanMonth()">'+divOpts+'</select></div>'+
+    '<div class="field light"><label>ปี</label><input id="pm_year" type="number" value="'+year+'" onchange="loadPlanMonth()"></div>'+
+  '</div><div id="pm_body"></div></div>');
+  loadPlanMonth();
+}
+async function loadPlanMonth(){
+  const div = (document.getElementById('pm_div')||{}).value;
+  const year = +(document.getElementById('pm_year')||{}).value || new Date().getFullYear();
+  state.cache.planYear = year;
+  const from = year+'-01-01', to = year+'-12-31';
+  const { data: rows } = await sb.from('daily_plan').select('team_id,plan_date').eq('division_id',div).gte('plan_date',from).lte('plan_date',to);
+  const teams = state.cache.teams.filter(t=>t.division_id===div);
+  const body = document.getElementById('pm_body');
+  if(!teams.length){ body.innerHTML='<div class="empty">ยังไม่มีทีมงานในฝ่ายนี้</div>'; return; }
+  const T=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const counts = {};
+  (rows||[]).forEach(r=>{ const m=+r.plan_date.slice(5,7); const key=r.team_id+'-'+m; counts[key]=(counts[key]||0)+1; });
+  function cellColor(n){ if(!n) return 'var(--soft)'; if(n<=3) return 'var(--teal-soft)'; if(n<=8) return '#a7e8d0'; return 'var(--teal)'; }
+  body.innerHTML = '<div class="table-wrap"><table><thead><tr><th>ทีม</th>'+T.map(m=>'<th class="num">'+m+'</th>').join('')+'</tr></thead><tbody>'+
+    teams.map(t=>'<tr><td><b>'+esc(t.name)+'</b></td>'+
+      T.map((_,i)=>{ const n=counts[t.id+'-'+(i+1)]||0; return '<td class="num tnum" style="background:'+cellColor(n)+';color:'+(n>8?'#fff':'var(--ink2)')+';font-weight:700">'+(n||'')+'</td>'; }).join('')+
+    '</tr>').join('')+'</tbody></table></div>'+
+    '<div style="margin-top:12px;font-size:11.5px;color:var(--muted)">ตัวเลข = จำนวนงานที่มอบหมายในเดือนนั้น · สีเข้มขึ้น = งานยุ่งขึ้น</div>';
+}
+
+/* Year: roadmap — โครงการ × 12 เดือน, แถบแสดงช่วงเวลาทำงานของโครงการ */
+async function planYear(){
+  const myDiv = state.profile.role==='admin' ? '' : state.profile.division_id;
+  const year = state.cache.planYear || new Date().getFullYear();
+  const divOpts = '<option value="">ทุกฝ่าย</option>'+state.divisions.map(d=>'<option value="'+d.id+'"'+(d.id===myDiv?' selected':'')+'>'+esc(d.name)+'</option>').join('');
+  content('<div class="card"><div class="row r2" style="margin-bottom:16px">'+
+    '<div class="field light"><label>ฝ่าย</label><select id="py_div" onchange="loadPlanYear()">'+divOpts+'</select></div>'+
+    '<div class="field light"><label>ปี</label><input id="py_year" type="number" value="'+year+'" onchange="loadPlanYear()"></div>'+
+  '</div><div id="py_body"></div></div>');
+  loadPlanYear();
+}
+function loadPlanYear(){
+  const div = (document.getElementById('py_div')||{}).value;
+  const year = +(document.getElementById('py_year')||{}).value || new Date().getFullYear();
+  state.cache.planYear = year;
+  const T=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const rows = state.projects.filter(p=> !div || p.division_id===div ).filter(p=>p.start_date||p.end_date);
+  const body = document.getElementById('py_body');
+  if(!rows.length){ body.innerHTML='<div class="empty">ไม่มีโครงการที่ระบุวันเริ่ม/สิ้นสุด</div>'; return; }
+  function monthInRange(m, start, end){
+    const s = start ? new Date(start) : null, e = end ? new Date(end) : null;
+    const cellStart = new Date(year, m, 1), cellEnd = new Date(year, m+1, 0);
+    if(s && cellEnd < s) return false;
+    if(e && cellStart > e) return false;
+    return true;
+  }
+  body.innerHTML = '<div class="table-wrap"><table><thead><tr><th>โครงการ</th>'+T.map(m=>'<th class="num">'+m+'</th>').join('')+'</tr></thead><tbody>'+
+    rows.map(p=>{ const active = /เสร็จ|จบ|ปิด/.test(p.status||'') ? false : true;
+      return '<tr><td><span class="badge">'+esc(p.code)+'</span> '+esc(p.name)+'</td>'+
+        T.map((_,i)=>{ const on = monthInRange(i, p.start_date, p.end_date);
+          return '<td style="padding:6px 8px"><div style="height:14px;border-radius:5px;background:'+(on?(active?'var(--blue)':'var(--muted2)'):'var(--soft)')+'"></div></td>';
+        }).join('')+
+      '</tr>';
+    }).join('')+'</tbody></table></div>';
+}
+
 function openDailyTask(){
   const div = (document.getElementById('dp_div')||{}).value || (state.divisions[0]||{}).id;
   const date = (document.getElementById('dp_date')||{}).value || new Date().toISOString().slice(0,10);
