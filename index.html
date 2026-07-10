@@ -985,15 +985,17 @@ function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; 
 function ymd(d){ return d.toISOString().slice(0,10); }
 const WD_T = ['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
 const TEAM_TAG_COLORS = ['#2F6FED','#0D9488','#7C3AED','#D97706','#DC2626','#0891B2'];
-function planShiftWeek(n){ state.cache.planWinOffset = (state.cache.planWinOffset||0) + n; planDay(divCfg(state.ws)); }
-function planJumpToday(){ state.cache.planWinOffset = 0; planDay(divCfg(state.ws)); }
+function planShiftWeek(n){ state.cache.planMonthOffset = (state.cache.planMonthOffset||0) + n; planDay(divCfg(state.ws)); }
+function planJumpToday(){ state.cache.planMonthOffset = 0; planDay(divCfg(state.ws)); }
 
 async function planDay(D){
-  const N=21, K=4, colW=44;
+  const colW=40;
   const today = new Date(); today.setHours(0,0,0,0);
-  const offsetDays = (state.cache.planWinOffset||0)*7;
-  const winStart = addDays(today, offsetDays-K);
-  const winEnd = addDays(winStart, N-1);
+  const monthOffset = state.cache.planMonthOffset||0;
+  const baseYear = today.getFullYear(), baseMonth = today.getMonth()+monthOffset;
+  const winStart = new Date(baseYear, baseMonth, 1);
+  const N = new Date(baseYear, baseMonth+1, 0).getDate(); // days in this calendar month
+  const winEnd = new Date(baseYear, baseMonth, N);
   const fetchFrom = ymd(addDays(winStart,-60));
   const { data: rows } = await sb.from('daily_plan').select('*').eq('division_id',state.ws)
     .gte('start_date', fetchFrom).lte('start_date', ymd(winEnd)).order('created_at');
@@ -1008,12 +1010,12 @@ async function planDay(D){
     (byTeam[r.team_id||'-'] = byTeam[r.team_id||'-'] || []).push({...r, s, e});
   });
   const teamIds = Object.keys(byTeam);
-  const rangeText = winStart.getDate()+' '+MONTH_T[winStart.getMonth()]+' – '+winEnd.getDate()+' '+MONTH_T[winEnd.getMonth()]+' '+(winEnd.getFullYear()+543);
+  const rangeText = MONTH_T[winStart.getMonth()]+' '+(winStart.getFullYear()+543);
 
   const nav = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'+
-    '<button class="btn btn-ghost btn-sm" onclick="planShiftWeek(-1)">‹ สัปดาห์ก่อน</button>'+
-    '<button class="btn btn-ghost btn-sm" onclick="planJumpToday()">วันนี้</button>'+
-    '<button class="btn btn-ghost btn-sm" onclick="planShiftWeek(1)">สัปดาห์ถัดไป ›</button>'+
+    '<button class="btn btn-ghost btn-sm" onclick="planShiftWeek(-1)">‹ เดือนก่อน</button>'+
+    '<button class="btn btn-ghost btn-sm" onclick="planJumpToday()">เดือนนี้</button>'+
+    '<button class="btn btn-ghost btn-sm" onclick="planShiftWeek(1)">เดือนถัดไป ›</button>'+
     '<span style="font-size:12px;color:var(--muted);margin-left:6px">'+rangeText+'</span></div>';
 
   let days=[]; for(let i=0;i<N;i++){ const d=addDays(winStart,i); const isToday = ymd(d)===ymd(today); const dow=d.getDay(); const isWeekend=(dow===0||dow===6);
