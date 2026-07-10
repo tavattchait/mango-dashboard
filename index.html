@@ -188,11 +188,25 @@ td.num,th.num{text-align:right}
 @keyframes slidein{from{transform:translateX(30px);opacity:0}to{transform:translateX(0);opacity:1}}
 
 .mobile-toggle{display:none}
+
+/* master-detail (Projects page) — stacks on tablet/portrait so the list doesn't crush the detail panel */
+.projects-split{display:flex;height:100%}
+.projects-list{width:340px;flex-shrink:0;border-right:1px solid var(--line);display:flex;flex-direction:column}
+.projects-detail{flex:1;overflow-y:auto;padding:24px 28px 44px}
+
+@media(max-width:1024px){
+  .projects-split{flex-direction:column;height:auto}
+  .projects-list{width:100%;max-height:260px;border-right:none;border-bottom:1px solid var(--line)}
+  .projects-detail{padding:18px 16px 32px}
+  .page,.page.wide{padding:18px 16px 32px}
+}
 @media(max-width:860px){
   .sidebar{position:fixed;top:0;bottom:0;left:0;transform:translateX(-100%);transition:transform .2s}
   .sidebar.open{transform:translateX(0)}
   .mobile-toggle{display:flex;background:var(--soft);border:1px solid var(--line);border-radius:9px;width:38px;height:38px;font-size:17px;align-items:center;justify-content:center}
-  .subnav{display:none}
+  .topbar{padding:10px 14px;height:auto;row-gap:8px}
+  .subnav{width:100%;order:3;overflow-x:auto}
+  .tb-search{display:none}
 }
 </style>
 </head>
@@ -816,8 +830,8 @@ async function renderProjectsPage(){
   const filtered = q ? dList.filter(p=>(p.name||'').toLowerCase().includes(q)||(p.code||'').toLowerCase().includes(q)||(p.client||'').toLowerCase().includes(q)) : dList;
   if(!state.selProj || !dList.some(p=>p.id===state.selProj)) state.selProj = filtered[0] ? filtered[0].id : null;
 
-  let html = '<div style="display:flex;height:100%">'+
-    '<div style="width:340px;flex-shrink:0;border-right:1px solid var(--line);display:flex;flex-direction:column">'+
+  let html = '<div class="projects-split">'+
+    '<div class="projects-list">'+
     '<div style="padding:16px 18px 10px;display:flex;align-items:center;gap:8px"><div style="font-size:13px;font-weight:600;color:var(--ink)">โครงการในฝ่าย</div><span style="font-size:11px;color:'+D.acc+';font-weight:600;background:'+D.soft+';padding:1px 8px;border-radius:16px">'+dList.length+'</span></div>'+
     (canWrite(state.ws) ? '<div style="padding:0 18px 10px"><button class="btn btn-ghost btn-sm" onclick="openMangoSync(\''+state.ws+'\')" style="width:100%">⬇️ ดึงจาก Mango</button></div>' : '')+
     '<div style="flex:1;overflow-y:auto;padding:2px 12px 16px;display:flex;flex-direction:column;gap:6px">'+
@@ -829,7 +843,7 @@ async function renderProjectsPage(){
         '<div style="font-size:12px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">'+esc(p.name)+'</div></div></div>';
     }).join(''))+
     '</div></div>'+
-    '<div style="flex:1;overflow-y:auto;padding:24px 28px 44px" id="projDetailHost">'+
+    '<div class="projects-detail" id="projDetailHost">'+
     (state.selProj ? '<div class="empty">กำลังโหลด…</div>' : '<div class="empty">เลือกโครงการทางซ้าย</div>')+
     '</div></div>';
   content(html);
