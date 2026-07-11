@@ -1181,7 +1181,7 @@ function renderProjectWBS(c, p, D, editable){
       '<span style="font-size:10.5px;font-weight:700;color:'+(r.pct>=100?'#0D9488':D.acc)+';font-family:var(--disp);flex-shrink:0">'+Math.round(r.pct)+'%</span>'+
       (editable ? '<button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:10px;flex-shrink:0" onclick="openProjectTaskEdit(\''+p.id+'\',\''+node.id+'\')">✎</button>' : '')+
       '</div>';
-    let cells=''; for(let i=0;i<N;i++){ const d=addDays(winStart,i); const isW=(d.getDay()===0||d.getDay()===6); cells+='<div style="background:'+(isW?'var(--soft)':'transparent')+';height:100%"></div>'; }
+    let cells=''; for(let i=0;i<N;i++){ cells+='<div style="height:100%"></div>'; }
     const barColor = isSummary ? '#334156' : D.acc;
     gridRows += '<div style="height:38px;border-bottom:1px solid #F5F7FC"><div style="display:grid;grid-template-columns:repeat('+N+','+colW+'px);height:100%;position:relative">'+cells+
       (todayIdx>=0&&todayIdx<N?'<div style="position:absolute;top:0;bottom:0;left:'+((todayIdx+0.5)*colW)+'px;width:2px;background:var(--red);opacity:.5;z-index:3"></div>':'')+
@@ -1364,14 +1364,14 @@ async function planDay(D){
     '<button class="btn btn-ghost btn-sm" onclick="planShiftWeek(1)">เดือนถัดไป ›</button>'+
     '<span style="font-size:12px;color:var(--muted);margin-left:6px">'+rangeText+'</span></div>';
 
-  let days=[]; for(let i=0;i<N;i++){ const d=addDays(winStart,i); const isToday = ymd(d)===ymd(today); const dow=d.getDay(); const isWeekend=(dow===0||dow===6);
-    days.push({num:d.getDate(), wd:WD_T[dow], isToday, isWeekend}); }
-  function emptyRowCells(){ let c=''; for(let i=0;i<N;i++) c+='<div style="background:'+(days[i].isWeekend?'var(--soft)':'transparent')+';height:100%;border-radius:8px"></div>'; return c; }
+  let days=[]; for(let i=0;i<N;i++){ const d=addDays(winStart,i); const isToday = ymd(d)===ymd(today); const dow=d.getDay();
+    days.push({num:d.getDate(), wd:WD_T[dow], isToday, isSun:dow===0}); }
+  function emptyRowCells(){ let c=''; for(let i=0;i<N;i++) c+='<div style="height:100%"></div>'; return c; }
 
   let dayHeader = '<div style="display:grid;grid-template-columns:repeat('+N+','+colW+'px);height:44px;border-bottom:1px solid var(--line);margin-bottom:6px">'+
     days.map(d=>'<div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:6px;gap:3px">'+
-      '<div style="font-size:9px;color:#94A3B8;font-weight:600">'+d.wd+'</div>'+
-      '<div style="width:22px;height:22px;border-radius:999px;display:flex;align-items:center;justify-content:center;background:'+(d.isToday?'var(--red)':'transparent')+';font-size:11px;font-weight:700;color:'+(d.isToday?'#fff':(d.isWeekend?'#64748B':'#101A33'))+';font-family:var(--disp)">'+d.num+'</div></div>').join('')+
+      '<div style="font-size:9px;color:'+(d.isSun?'#DC2626':'#94A3B8')+';font-weight:600">'+d.wd+'</div>'+
+      '<div style="width:22px;height:22px;border-radius:999px;display:flex;align-items:center;justify-content:center;background:'+(d.isToday?'var(--red)':'transparent')+';font-size:11px;font-weight:700;color:'+(d.isToday?'#fff':(d.isSun?'#DC2626':'#101A33'))+';font-family:var(--disp)">'+d.num+'</div></div>').join('')+
     '</div>';
 
   if(!teamIds.length){
@@ -1420,7 +1420,7 @@ async function planDay(D){
         '<div style="font-size:10px;color:var(--muted2);margin-top:1px">'+esc(proj?proj.code:'-')+' · '+thDate(t.start_date)+'</div></div>'+
         (canSubmitField(state.ws) ? '<button class="btn btn-ghost btn-sm" style="flex-shrink:0;margin-right:6px;padding:4px 8px;font-size:10.5px" onclick="openFieldReport(\''+t.id+'\',\''+(t.project_id||'')+'\',\''+(t.team_id||'')+'\')">📝 รายงานผล</button>' : '')+
         '<span style="font-size:11px;font-weight:700;color:'+(pct>=100?'#0D9488':(pct>0?tc:'#94A3B8'))+';font-family:var(--disp);flex-shrink:0">'+pct+'%</span></div>';
-      let cells2=''; for(let i=0;i<N;i++) cells2+='<div style="background:'+(days[i].isWeekend?'var(--soft)':'transparent')+';height:100%;border-radius:8px"></div>';
+      let cells2=''; for(let i=0;i<N;i++) cells2+='<div style="height:100%"></div>';
       const todayIdx = days.findIndex(d=>d.isToday);
       gridRows += '<div style="height:46px"><div style="display:grid;grid-template-columns:repeat('+N+','+colW+'px);height:100%;position:relative">'+cells2+
         (todayIdx>=0?'<div style="position:absolute;top:2px;bottom:2px;left:'+((todayIdx+0.5)*colW)+'px;width:2px;background:var(--red);border-radius:2px;z-index:3;opacity:.55"></div>':'')+
@@ -1438,7 +1438,6 @@ async function planDay(D){
     '</div></div>'+
     '<div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:var(--muted);align-items:center">'+
     '<span style="display:flex;align-items:center;gap:5px"><span style="width:20px;height:2px;background:var(--red);display:inline-block"></span>วันนี้</span>'+
-    '<span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:10px;background:var(--soft);display:inline-block;border-radius:16px"></span>วันหยุดสุดสัปดาห์</span>'+
     '<span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:10px;background:'+D.acc+';display:inline-block;border-radius:16px"></span>งานย่อย + % ความคืบหน้า</span></div>';
 }
 async function planMonth(D){
