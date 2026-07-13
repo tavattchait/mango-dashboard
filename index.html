@@ -98,6 +98,19 @@ button{cursor:pointer}
 .ws-tile .lbl{font-size:9px;font-weight:600;letter-spacing:.15em;color:#9AA4B2;font-family:var(--mono);text-transform:uppercase}
 .ws-tile.active .lbl{color:var(--tc,var(--teal))}
 .sb-bottom{display:flex;flex-direction:column;align-items:center;gap:12px}
+
+/* Mango-style module launcher (หน้า "เมนู") */
+.launch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px}
+.launch-tile{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px 12px 18px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:10px;box-shadow:0 1px 2px rgba(16,24,40,.03);
+  transition:border-color .15s,box-shadow .15s,transform .08s;font-family:inherit}
+.launch-tile:hover{border-color:var(--tc,var(--indigo));box-shadow:0 6px 18px -10px rgba(16,24,40,.3)}
+.launch-tile:active{transform:translateY(1px)}
+.launch-tile .lt-icon{width:54px;height:54px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:27px}
+.launch-tile .lt-name{font-size:13px;font-weight:600;color:var(--ink);text-align:center;line-height:1.3}
+.launch-sect{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;
+  font-family:var(--mono);margin:22px 2px 10px;display:flex;align-items:center;gap:10px}
+.launch-sect::after{content:"";flex:1;height:1px;background:var(--line2)}
 .sb-gear{width:46px;height:46px;border-radius:var(--r);border:1px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px}
 .sb-gear:hover{border-color:#C7CDD6}
 .sb-avatar{width:38px;height:38px;border-radius:var(--r);background:var(--indigo);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12.5px;color:#fff;cursor:pointer}
@@ -724,6 +737,7 @@ async function go(){
   try{
     if(ws==='company'){
       if(sub==='overview') await renderCoOverview();
+      else if(sub==='menu') await renderLauncher();
       else if(sub==='divisions') await renderCoDivisions();
       else if(sub==='finance') await renderCoFinance();
       else if(sub==='activity') await renderCoActivity();
@@ -747,8 +761,13 @@ function renderShell(){
   document.documentElement.style.setProperty('--acc2', D.acc2);
   // sidebar tiles
   const tiles = [CO_CFG, ...state.divisions.map(d=>divCfg(d.id))];
-  document.getElementById('sbTiles').innerHTML = tiles.map(t=>{
-    const on = t.id===state.ws;
+  const onMenu = state.ws==='company' && state.sub==='menu';
+  document.getElementById('sbTiles').innerHTML =
+    '<button class="ws-tile'+(onMenu?' active':'')+'" style="--tc:var(--indigo)" onclick="goWsSub(\'company\',\'menu\')">'+
+      '<div class="icon" style="'+(onMenu?'border-color:var(--indigo)':'')+'">▦</div>'+
+      '<span class="lbl">เมนู</span></button>'+
+    tiles.map(t=>{
+    const on = t.id===state.ws && !onMenu;
     return '<button class="ws-tile'+(on?' active':'')+'" style="--tc:'+t.acc+'" onclick="goWs(\''+t.id+'\')">'+
       '<div class="icon" style="'+(on?'border-color:'+t.acc:'')+'">'+t.icon+'</div>'+
       '<span class="lbl">'+esc(t.id==='company'?'องค์กร':t.name.replace(/^ฝ่าย/,''))+'</span></button>';
@@ -1025,6 +1044,57 @@ async function renderCoActivity(){
         '<div style="font-size:11px;color:var(--muted2);margin-top:3px">โดย '+esc(r.actor_name||'-')+' · '+esc((r.ts||'').replace('T',' ').slice(0,16))+'</div></div></div>';
     }).join(''))+'</div>'+
     '</div></div>');
+}
+
+/* ============================================================
+ * LAUNCHER — เมนูหลักแบบ Mango: กระเบื้องโมดูลใหญ่ กดเดียวถึงทุกส่วน
+ * ============================================================ */
+function launcherTile(ws, sub, icon, name, acc, soft){
+  return '<button class="launch-tile" style="--tc:'+acc+'" onclick="goWsSub(\''+ws+'\',\''+sub+'\')">'+
+    '<div class="lt-icon" style="background:'+soft+'">'+icon+'</div>'+
+    '<div class="lt-name">'+esc(name)+'</div></button>';
+}
+async function renderLauncher(){
+  const p = state.profile, role = p.role, isAdmin = role==='admin';
+  await loadAllProjects(); // ให้ตัวเลขโครงการในหัวข้อฝ่ายถูกต้อง
+  // ฝ่ายตัวเองขึ้นก่อน (ถ้ามี) — คนหน้างานเจอของตัวเองทันที
+  const divs = state.divisions.slice().sort((a,b)=>(a.id===p.division_id?-1:0)-(b.id===p.division_id?-1:0));
+  const canOps = isAdmin||['pm','manager','eng','field'].includes(role);
+  const canCost = isAdmin||['pm','manager','accountant'].includes(role);
+
+  let html = '<div class="page">'+
+    '<div style="margin-bottom:4px"><div style="font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-.2px">เมนูหลัก</div>'+
+    '<div style="font-size:12.5px;color:var(--muted)">เลือกส่วนงานที่ต้องการ — กดครั้งเดียวถึงเลย</div></div>';
+
+  divs.forEach(d=>{
+    const D = divCfg(d.id);
+    const nProj = state.projects.filter(x=>x.division_id===d.id).length;
+    html += '<div class="launch-sect">'+D.icon+' '+esc(d.name)+' · '+nProj+' โครงการ</div><div class="launch-grid">'+
+      launcherTile(d.id,'overview','📊','ภาพรวมฝ่าย',D.acc,D.soft)+
+      launcherTile(d.id,'projects','📁','โครงการ',D.acc,D.soft)+
+      (canOps ? launcherTile(d.id,'plan','📅','วางแผน',D.acc,D.soft)+
+                launcherTile(d.id,'ops','👷','ปฏิบัติงาน',D.acc,D.soft)+
+                launcherTile(d.id,'team','🧑‍🤝‍🧑','ทีมงาน',D.acc,D.soft) : '')+
+      (canCost ? launcherTile(d.id,'cost','🧾','ต้นทุน',D.acc,D.soft) : '')+
+    '</div>';
+  });
+
+  html += '<div class="launch-sect">🏢 องค์กร</div><div class="launch-grid">'+
+    launcherTile('company','overview','📊','ภาพรวมองค์กร',CO_CFG.acc,CO_CFG.soft)+
+    launcherTile('company','divisions','⚖️','เทียบฝ่าย',CO_CFG.acc,CO_CFG.soft)+
+    launcherTile('company','finance','💰','การเงินรวม',CO_CFG.acc,CO_CFG.soft)+
+    launcherTile('company','activity','📰','ความเคลื่อนไหว',CO_CFG.acc,CO_CFG.soft)+
+  '</div>';
+
+  if(isAdmin){
+    html += '<div class="launch-sect">⚙️ การจัดการระบบ</div><div class="launch-grid">'+
+      launcherTile('company','users','👥','ผู้ใช้งาน','#334156','var(--soft)')+
+      launcherTile('company','targets','🎯','เป้าหมายบริษัท','#334156','var(--soft)')+
+      launcherTile('company','audit','🗒️','ประวัติการใช้งาน','#334156','var(--soft)')+
+    '</div>';
+  }
+  html += '</div>';
+  content(html);
 }
 
 /* ============================================================
