@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WRC ERP</title>
 <link rel="icon" href="assets/wrc-logo.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4338CA">
+<link rel="apple-touch-icon" href="assets/wrc-logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -667,6 +670,11 @@ function setSearch(v){ state.searchQuery=v; if(state.sub==='projects') renderPro
 function enterApp(){
   document.getElementById('loginView').classList.add('hidden');
   document.getElementById('appView').classList.remove('hidden');
+  // คนหน้างานเปิดมาต้องเจองานตัวเองเลย ไม่ใช่ภาพรวมองค์กร — ลดจำนวนกดจาก 3 ครั้งเหลือ 0
+  const p = state.profile;
+  if(['field','eng'].includes(p.role) && p.division_id){
+    state.ws = p.division_id; state.sub = 'ops'; state.opsTab = 'today';
+  }
   go();
 }
 async function go(){
@@ -1611,12 +1619,23 @@ function switchOpsTab(t){ state.opsTab=t; renderOpsPage(); }
 
 /* ---------- งานวันนี้ ---------- */
 async function renderOpsToday(D){
-  const today = new Date().toISOString().slice(0,10);
-  const { data: rows } = await sb.from('daily_plan').select('*').eq('division_id',state.ws).eq('plan_date',today).eq('status','อนุมัติ').order('created_at');
+  const todayD = new Date(); todayD.setHours(0,0,0,0);
+  const today = ymd(todayD);
+  // งานที่ "กำลังทำอยู่วันนี้" = ช่วง start_date ถึง start_date+duration ครอบวันนี้ (ไม่ใช่แค่ plan_date ตรงวันนี้เป๊ะ)
+  const { data: fetched } = await sb.from('daily_plan').select('*').eq('division_id',state.ws).eq('status','อนุมัติ')
+    .gte('start_date', ymd(addDays(todayD,-60))).lte('start_date', today).order('created_at');
+  const rows = (fetched||[]).filter(r=>{
+    const s = new Date(r.start_date+'T00:00:00');
+    return addDays(s, Math.max(1,+r.duration||1)-1) >= todayD;
+  });
   const body = document.getElementById('opsBody'); if(!body) return;
-  if(!rows||!rows.length){ body.innerHTML='<div class="card"><div class="empty">ยังไม่มีงานที่ได้รับมอบหมายวันนี้</div></div>'; return; }
+  const quickActions = '<div class="grid g3" style="margin-bottom:14px">'+
+    [['openFieldReport(null,null,null)','📝','รายงานผลวันนี้'],['openRequisition()','📋','ขอเบิกของ'],['switchOpsTab(\'submit\')','📅','ส่งแผนพรุ่งนี้']].map(a=>
+    '<button onclick="'+a[0]+'" style="background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px 12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:0 1px 2px rgba(16,24,40,.03)">'+
+    '<span style="font-size:30px">'+a[1]+'</span><span style="font-size:13px;font-weight:600;color:var(--ink)">'+a[2]+'</span></button>').join('')+'</div>';
+  if(!rows.length){ body.innerHTML = quickActions+'<div class="card"><div class="empty">ยังไม่มีงานที่กำลังทำอยู่วันนี้</div></div>'; return; }
   const byTeam = {}; rows.forEach(r=>{ (byTeam[r.team_id||'-']=byTeam[r.team_id||'-']||[]).push(r); });
-  body.innerHTML = '<div class="card" style="padding:0;overflow:hidden">'+Object.keys(byTeam).map(tid=>{
+  body.innerHTML = quickActions+'<div class="card" style="padding:0;overflow:hidden">'+Object.keys(byTeam).map(tid=>{
     const team = state.cache.teams.find(t=>t.id===tid);
     return '<div style="padding:12px 18px;background:'+D.soft+';display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--line)">'+
       '<div style="width:26px;height:26px;border-radius:9px;background:'+D.acc+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff">'+esc((team?team.name:'-').charAt(0))+'</div>'+
@@ -1824,7 +1843,10 @@ async function renderOpsReports(D){
 }
 async function openApplyProgress(reportId, projectId){
   const { data: tasks } = await sb.from('project_tasks').select('*').eq('project_id', projectId).order('sort_order');
-  const opts = (tasks||[]).map(t=>'<option value="'+t.id+'">'+esc(t.name)+' (ปัจจุบัน '+Math.round(t.pct||0)+'%)</option>').join('');
+  // เฉพาะงานย่อย (leaf) เท่านั้น — summary task คำนวณ % จากลูกอัตโนมัติ ตั้งเองไปก็ถูกทับ
+  const parentIds = new Set((tasks||[]).map(t=>t.parent_id).filter(Boolean));
+  const leaves = (tasks||[]).filter(t=>!parentIds.has(t.id));
+  const opts = leaves.map(t=>'<option value="'+t.id+'">'+esc(t.name)+' (ปัจจุบัน '+Math.round(t.pct||0)+'%)</option>').join('');
   document.getElementById('modalHost').innerHTML =
     '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:420px">'+
     '<div class="modal-head"><span class="t">📊 อัปเดต % ความคืบหน้างาน</span><button class="modal-x" onclick="closeModal()">×</button></div>'+

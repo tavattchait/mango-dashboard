@@ -1,0 +1,14 @@
+{
+  "name": "ระบบ WRC",
+  "short_name": "WRC",
+  "description": "ระบบบริหารโครงการและปฏิบัติงาน WRC",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#EEF1FA",
+  "theme_color": "#4338CA",
+  "icons": [
+    { "src": "assets/wrc-logo.png", "sizes": "239x240", "type": "image/png", "purpose": "any" }
+  ]
+}
