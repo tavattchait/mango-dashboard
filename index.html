@@ -306,6 +306,42 @@ function buildMockDb(){
     }
   });
 
+  // financials / S-curve / losses — ทุกโครงการ ย้อนหลัง 4 เดือน ให้พรีวิวได้ทุกแท็บ ไม่ต้องรอข้อมูลจริง
+  const financials = [], scurve = [], losses = [];
+  projects.forEach(p=>{
+    for(let m=3;m>=0;m--){
+      const frac = Math.max(0.15, 1-m*0.28);
+      const rev = Math.round(p.total_amt*frac*0.22);
+      financials.push({ id:genId(), project_id:p.id, month:ymOffset(m),
+        invoiced:Math.round(rev*0.9), uninvoiced:Math.round(rev*0.1), wip:Math.round(rev*0.15),
+        cash_in:Math.round(rev*0.85), cash_out:Math.round(rev*0.6), cash_bal:Math.round(rev*0.25),
+        ar_aging:Math.round(rev*0.12), ar_retention:Math.round(rev*0.05), ap_aging:Math.round(rev*0.08), ap_retention:Math.round(rev*0.03),
+        pending_po:0, pending_sub:0, updated_by:null, updated_at:new Date().toISOString() });
+      scurve.push({ id:genId(), project_id:p.id, month:ymOffset(m),
+        plan_work:Math.round(rev*1.05), actual_work:rev, plan_bill:Math.round(rev*1.02), actual_bill:Math.round(rev*0.95), actual_cost:Math.round(rev*0.66) });
+      const totalLoss = Math.round(rev*0.015*(m===0?1.4:1));
+      losses.push({ id:genId(), project_id:p.id, month:ymOffset(m), actual_work:rev, total_loss:totalLoss,
+        neglect:Math.round(totalLoss*0.3), underground:Math.round(totalLoss*0.25), construction:Math.round(totalLoss*0.2),
+        machinery:Math.round(totalLoss*0.15), complaint:Math.round(totalLoss*0.05), other:Math.round(totalLoss*0.05) });
+    }
+  });
+
+  // สต็อกวัสดุ + เอกสารแนบ — ตัวอย่างเฉพาะ 3 โครงการหลัก (ไม่ต้องมีครบทุกโครงการ)
+  const stockSeed = [
+    ['PJ-2601','ท่อ HDPE 110mm','เมตร',480,42720],['PJ-2601','เคเบิลไทร์ 3 แกน','เมตร',120,86400],
+    ['EN-2601','แผงโซลาร์ 550W','แผง',60,390000],['EN-2601','สายไฟ DC 6mm²','ม้วน',8,24800],
+    ['PC-2602','ปูนซีเมนต์','ตัน',18,144720],
+  ];
+  const stock = stockSeed.map(r=>{ const proj=projects.find(p=>p.code===r[0]);
+    return { id:genId(), project_id:proj.id, material:r[1], unit:r[2], qty_balance:r[3], amount_balance:r[4], updated_at:new Date().toISOString() }; });
+  const attachSeed = [
+    ['PJ-2601','แบบก่อสร้าง Shop Drawing Rev.2.pdf'],['PJ-2601','ใบเสนอราคา ท่อ HDPE.pdf'],
+    ['EN-2601','สเปกแผงโซลาร์ JA Solar 550W.pdf'],['PC-2602','แบบโครงสร้างบ่อพัก MH.04.pdf'],
+  ];
+  const PLACEHOLDER_DOC = 'data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400"><rect width="100%" height="100%" fill="%23EEF1F8"/><text x="50%" y="50%" font-size="16" text-anchor="middle" fill="%238592A8">เอกสารตัวอย่าง (โหมดพรีวิว)</text></svg>');
+  const attachments = attachSeed.map(r=>{ const proj=projects.find(p=>p.code===r[0]);
+    return { id:genId(), project_id:proj.id, file_url:PLACEHOLDER_DOC, name:r[1], uploaded_by:null, uploaded_at:new Date().toISOString() }; });
+
   const teams = [
     { id:genId(), division_id:'pjcm', name:'ทีม A สายใต้ดิน', members:['อนันต์ ศรีสุข','วีระ ใจดี'] },
     { id:genId(), division_id:'pjcm', name:'ทีม C ไลน์แมน', members:['สมชาย ก้องภพ'] },
@@ -398,8 +434,8 @@ function buildMockDb(){
     { id:'demo-admin', username:'demo', full_name:'ผู้เยี่ยมชม (โหมดพรีวิว)', role:'admin', division_id:null, phone:'', status:'ใช้งาน', active:true },
   ];
 
-  return { divisions, profiles, projects, project_monthly, financials:[], scurve:[], losses:[], stock:[],
-    milestones, cost_entries, teams, daily_plan, attachments:[], requisitions, field_reports:[], targets, audit_log, project_tasks, item_catalog };
+  return { divisions, profiles, projects, project_monthly, financials, scurve, losses, stock,
+    milestones, cost_entries, teams, daily_plan, attachments, requisitions, field_reports:[], targets, audit_log, project_tasks, item_catalog };
 }
 const MOCK_DB = DEMO_MODE ? buildMockDb() : null;
 
@@ -641,8 +677,7 @@ function subnavConfig(){
   const role = state.profile.role, isAdmin = role==='admin';
   if(state.ws==='company'){
     const tabs=[['overview','ภาพรวม'],['divisions','เทียบฝ่าย'],['finance','การเงินรวม'],['activity','ความเคลื่อนไหว']];
-    if(isAdmin) tabs.push(['users','ผู้ใช้งาน'],['targets','เป้าหมาย'],['audit','ประวัติ']);
-    return tabs;
+    return tabs; // ผู้ใช้งาน/เป้าหมาย/ประวัติ ย้ายไปอยู่ในเมนูไอคอนเฟือง (⚙️) แทนแล้ว ไม่ต้องมีเป็นแท็บที่นี่
   }
   const tabs=[['overview','ภาพรวมฝ่าย'],['projects','โครงการ']];
   if(isAdmin||['pm','manager','eng','field'].includes(role)){ tabs.push(['plan','วางแผน'],['team','ทีม'],['ops','ปฏิบัติงาน']); }
@@ -667,6 +702,8 @@ function toggleMenu(name){ state.openMenu = state.openMenu===name?null:name; ren
 function closeMenu(){ state.openMenu=null; renderShell(); }
 function goWs(id){ state.ws=id; state.sub='overview'; state.selProj=null; state.searchQuery=''; go(); }
 function goSub(id){ state.sub=id; go(); }
+// เปลี่ยน workspace+sub พร้อมกันในคลิกเดียว — ต้องใช้ตัวนี้แทนเรียก goWs()แล้วต่อด้วย goSub() เพราะสองอันนั้นแต่ละตัวเรียก go() (async) ของตัวเอง ชนกันได้ (race condition เจอบั๊กจริง)
+function goWsSub(wsId, subId){ state.ws=wsId; state.sub=subId; state.selProj=null; state.searchQuery=''; go(); }
 function setSearch(v){ state.searchQuery=v; if(state.sub==='projects') renderProjectsPage(); }
 
 function enterApp(){
@@ -721,7 +758,14 @@ function renderShell(){
     '<div style="position:relative">'+
       '<button class="sb-gear" onclick="toggleMenu(\'settings\')">⚙️</button>'+
       (state.openMenu==='settings' ? ('<div class="rail-pop-bg" onclick="closeMenu()"></div><div class="rail-pop">'+
-        '<div style="font-size:12.5px;font-weight:600;color:var(--ink);margin-bottom:2px">ตั้งค่าองค์กร</div>'+
+        (p.role==='admin' ? (
+          '<div style="font-size:12.5px;font-weight:600;color:var(--ink);margin-bottom:8px">การจัดการระบบ</div>'+
+          '<div style="display:flex;flex-direction:column;gap:1px;margin-bottom:10px">'+
+          [['users','👥 ผู้ใช้งาน'],['targets','🎯 เป้าหมายบริษัท'],['audit','🗒️ ประวัติการใช้งาน']].map(a=>
+            '<div onclick="closeMenu();goWsSub(\'company\',\''+a[0]+'\')" style="padding:8px 10px;border-radius:12px;font-size:12.5px;color:var(--ink2);cursor:pointer" onmouseover="this.style.background=\'var(--soft)\'" onmouseout="this.style.background=\'transparent\'">'+a[1]+'</div>').join('')+
+          '</div><div style="border-top:1px solid #EEF1F8;margin:0 0 10px"></div>'
+        ) : '')+
+        '<div style="font-size:12.5px;font-weight:600;color:var(--ink);margin-bottom:2px">ฝ่ายงาน</div>'+
         '<div style="font-size:11px;color:var(--muted);margin-bottom:10px">ฝ่ายงานทั้งหมดใน WRC ERP</div>'+
         state.divisions.map(d=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #EEF1F8">'+
           '<span style="width:8px;height:8px;border-radius:16px;background:'+esc(d.accent_color||divCfg(d.id).acc)+';flex-shrink:0"></span>'+
@@ -772,7 +816,7 @@ async function loadNotifPreview(){
         '<div style="min-width:0"><div style="font-size:11.5px;color:var(--ink2);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+m.t+' · '+esc(a.entity_key||a.entity)+'</div>'+
         '<div style="font-size:10.5px;color:var(--muted2)">'+esc((a.ts||'').replace('T',' ').slice(0,16))+'</div></div></div>';
     }).join(''))+
-    '<div onclick="goWs(\'company\');goSub(\'activity\')" style="text-align:center;padding:9px;margin-top:4px;border-top:1px solid #EEF1F8;font-size:12px;font-weight:600;color:var(--blue);cursor:pointer">ดูทั้งหมด</div>';
+    '<div onclick="goWsSub(\'company\',\'activity\')" style="text-align:center;padding:9px;margin-top:4px;border-top:1px solid #EEF1F8;font-size:12px;font-weight:600;color:var(--blue);cursor:pointer">ดูทั้งหมด</div>';
 }
 
 /* ============================================================
