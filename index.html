@@ -868,14 +868,14 @@ async function renderCoOverview(){
       '<div class="progress-bar"><div style="width:'+c.progress+'%;background:'+c.D.acc+'"></div></div>'+
       '<div style="display:flex;align-items:center;gap:5px;margin-top:12px;font-size:12px;font-weight:600;color:'+c.D.acc+'">เข้าสู่ฝ่าย →</div>'+
       '</div></div>').join('')+'</div>'+
-    '<div class="grid" style="grid-template-columns:1.9fr 1fr">'+
-      '<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'+
+    '<div class="grid" style="grid-template-columns:1.9fr 1fr;align-items:stretch">'+
+      '<div class="card" style="display:flex;flex-direction:column"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'+
         '<div><div class="card-t">รายได้รวมทั้งองค์กร</div><div class="card-sub">แยกตามฝ่าย · บาท · 12 เดือนล่าสุด</div></div>'+
         '<div style="display:flex;gap:12px;font-size:11.5px">'+state.divisions.map(d=>'<span style="display:flex;align-items:center;gap:5px;color:#5B6B84"><span style="width:8px;height:8px;border-radius:16px;background:'+divCfg(d.id).acc+'"></span>'+esc(d.name)+'</span>').join('')+'</div></div>'+
-        svgStackedArea(state.divisions.map(d=>({data:seriesByDiv[d.id],color:divCfg(d.id).acc})), months.map(m=>MONTH_T[+m.split('-')[1]-1]))+
+        '<div style="flex:1;display:flex;align-items:center">'+svgStackedArea(state.divisions.map(d=>({data:seriesByDiv[d.id],color:divCfg(d.id).acc})), months.map(m=>MONTH_T[+m.split('-')[1]-1]))+'</div>'+
       '</div>'+
-      '<div class="card"><div class="card-t">สถานะโครงการรวม</div><div class="card-sub" style="margin-bottom:8px">ทั้งหมด '+projects.length+' โครงการ</div>'+
-        '<div style="display:flex;align-items:center;gap:10px"><div style="position:relative">'+coDonut+
+      '<div class="card" style="display:flex;flex-direction:column;margin-top:0"><div class="card-t">สถานะโครงการรวม</div><div class="card-sub" style="margin-bottom:8px">ทั้งหมด '+projects.length+' โครงการ</div>'+
+        '<div style="flex:1;display:flex;align-items:center;gap:10px"><div style="position:relative">'+coDonut+
         '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center"><div style="font-family:var(--disp);font-size:24px;font-weight:700;color:var(--ink)">'+projects.length+'</div><div style="font-size:10px;color:var(--muted2)">โครงการ</div></div></div>'+
         '<div style="flex:1;display:flex;flex-direction:column;gap:10px">'+statusLegend.map(s=>
           '<div style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:16px;background:'+s.color+'"></span><span style="font-size:11.5px;color:#5B6B84;flex:1">'+esc(s.label)+'</span><span style="font-size:12px;font-weight:600;color:var(--ink);font-family:var(--disp)">'+s.count+'</span></div>').join('')+'</div></div></div>'+
@@ -1017,14 +1017,14 @@ async function renderDivOverview(){
         miniStat('คืบหน้าเดือนนี้', progress.toFixed(0)+'%', D.acc)+
         miniStat('กำไรเดือนนี้', margin.toFixed(0)+'%', D.acc)+
       '</div></div>'+
-    '<div class="grid" style="grid-template-columns:1.5fr 1fr;margin-bottom:14px">'+
-      '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
+    '<div class="grid" style="grid-template-columns:1.5fr 1fr;align-items:stretch;margin-bottom:14px">'+
+      '<div class="card" style="display:flex;flex-direction:column"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
         '<div><div class="card-t">รายได้ vs ต้นทุน</div><div class="card-sub">เฉพาะฝ่ายนี้ · บาท</div></div>'+
         '<div style="display:flex;gap:10px;font-size:11.5px"><span style="display:flex;align-items:center;gap:5px;color:#5B6B84"><span style="width:8px;height:8px;border-radius:16px;background:'+D.acc+'"></span>รายได้</span><span style="display:flex;align-items:center;gap:5px;color:#5B6B84"><span style="width:8px;height:8px;border-radius:16px;background:#C9D2E3"></span>ต้นทุน</span></div></div>'+
-        svgLineChart(revSeries, costSeries, D.acc, months.map(m=>MONTH_T[+m.split('-')[1]-1]))+
+        '<div style="flex:1;display:flex;align-items:center">'+svgLineChart(revSeries, costSeries, D.acc, months.map(m=>MONTH_T[+m.split('-')[1]-1]))+'</div>'+
       '</div>'+
-      '<div class="card"><div class="card-t" style="margin-bottom:12px">ทีมงานในฝ่าย</div>'+
-        (!divTeams.length ? '<div class="empty">ยังไม่มีทีมงาน</div>' : '<div style="display:flex;flex-direction:column;gap:13px">'+divTeams.map(x=>
+      '<div class="card" style="display:flex;flex-direction:column;margin-top:0"><div class="card-t" style="margin-bottom:12px">ทีมงานในฝ่าย</div>'+
+        (!divTeams.length ? '<div class="empty">ยังไม่มีทีมงาน</div>' : '<div style="display:flex;flex-direction:column;gap:13px;justify-content:center;flex:1">'+divTeams.map(x=>
           '<div style="display:flex;align-items:center;gap:11px"><div style="width:32px;height:32px;border-radius:16px;background:'+D.soft+';color:'+D.acc+';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12.5px;font-family:var(--disp);flex-shrink:0">'+esc(x.t.name.charAt(0))+'</div>'+
           '<div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--ink2);font-weight:500">'+esc(x.t.name)+'</span><span style="font-size:11.5px;font-weight:600;color:'+D.acc+';font-family:var(--disp)">'+x.util+'%</span></div>'+
           '<div class="progress-bar" style="margin-top:5px"><div style="width:'+x.util+'%;background:'+D.acc+'"></div></div></div></div>').join('')+'</div>')+
@@ -1120,12 +1120,12 @@ async function renderProjectDetail(projId){
       miniStat('คงเหลือ','฿'+fmt(remaining),'#0D9488')+
       miniStat('กำไรขั้นต้น',marginPct.toFixed(1)+'%','#4338CA')+
     '</div>'+
-    '<div class="grid" style="grid-template-columns:1fr 1.4fr">'+
+    '<div class="grid" style="grid-template-columns:1fr 1.4fr;align-items:stretch">'+
       '<div class="card" style="display:flex;flex-direction:column;align-items:center">'+
         '<div class="card-t" style="align-self:flex-start;margin-bottom:6px">ความคืบหน้ารวม (บิล/สัญญา)</div>'+
         svgMiniProgress(progressPct, D.acc)+
         '<div style="display:flex;gap:8px;margin-top:10px;font-size:11px;color:var(--muted)"><span>เริ่ม '+thDate(p.start_date)+'</span><span style="color:#94A3B8">→</span><span>สิ้นสุด '+thDate(p.end_date)+'</span></div></div>'+
-      '<div class="card"><div class="card-t" style="margin-bottom:14px">ขั้นตอนงาน (Milestones)'+(editable?' <button class="btn btn-ghost btn-sm" style="float:right" onclick="openMilestone(\''+p.id+'\')">+ เพิ่ม</button>':'')+'</div>'+
+      '<div class="card" style="margin-top:0"><div class="card-t" style="margin-bottom:14px">ขั้นตอนงาน (Milestones)'+(editable?' <button class="btn btn-ghost btn-sm" style="float:right" onclick="openMilestone(\''+p.id+'\')">+ เพิ่ม</button>':'')+'</div>'+
         (!milestones.length ? '<div class="empty">ยังไม่มีขั้นตอนงาน</div>' : milestones.map(m=>
           '<div style="display:flex;gap:12px;align-items:flex-start;padding-bottom:14px">'+
           '<div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:'+(m.done?'#E4F7F3':(m.active?'#fff':'#EEF1F8'))+';border:2px solid '+(m.done?'#0D9488':(m.active?D.acc:'#D7DEEC'))+'">'+(m.done?'✓':'')+'</div>'+
