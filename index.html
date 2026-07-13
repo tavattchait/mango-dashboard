@@ -308,18 +308,31 @@ function buildMockDb(){
     { id:genId(), division_id:'pc', name:'ทีม D โยธา/บ่อปูน', members:['ประเสริฐ มั่นคง'] },
   ];
 
+  // คลังไอเทมเบิกจริง (รถ/เครื่องมือ/วัสดุ) — ต่อยอดจากเดโม่ FieldSync ให้เลือกจากรายการแทนพิมพ์เอง
+  const itemSeed = [
+    ['pjcm','รถ','รถเครน 10 ตัน','คัน'], ['pjcm','รถ','รถแบ็คโฮ PC30','คัน'],
+    ['pjcm','เครื่องมือ','เครื่อง HDD เจาะดันท่อ','เครื่อง'], ['pjcm','วัสดุ','ท่อ HDPE 110mm','เมตร'],
+    ['en','รถ','รถกระเช้า 12 เมตร','คัน'], ['en','เครื่องมือ','เครื่องมือขันแรงบิด','ชุด'], ['en','วัสดุ','แผงโซลาร์ 550W','แผง'],
+    ['pc','รถ','รถโม่ปูน','คัน'], ['pc','เครื่องมือ','เครื่องสั่นคอนกรีต','เครื่อง'], ['pc','วัสดุ','ปูนซีเมนต์','ตัน'],
+  ];
+  const item_catalog = itemSeed.map(r=>({ id:genId(), division_id:r[0], kind:r[1], name:r[2], unit:r[3], code:'', active:true, created_at:new Date().toISOString() }));
+  const findItem = (div,name) => item_catalog.find(i=>i.division_id===div && i.name===name);
+
   const dailyTasksSeed = [
-    ['pjcm',0,'ทีม A สายใต้ดิน','PJ-2601','ขุดเปิด + วางท่อ HDD',-2,8,70],
-    ['pjcm',0,'ทีม A สายใต้ดิน','PJ-2601','ร้อยสาย + เชื่อมต่อ',6,6,20],
-    ['pjcm',1,'ทีม C ไลน์แมน','PJ-2603','ปักเสาไฟฟ้า LED',-1,5,100],
-    ['en',2,'ทีม B โซลาร์','EN-2601','ติดตั้งโครงสร้างแผง',-3,7,80],
-    ['en',2,'ทีม B โซลาร์','EN-2601','ติดตั้งแผงโซลาร์ 550W',4,8,40],
-    ['pc',3,'ทีม D โยธา/บ่อปูน','PC-2602','งานเหล็กเสริม + แบบหล่อ',-1,7,35],
+    ['pjcm',0,'ทีม A สายใต้ดิน','PJ-2601','ขุดเปิด + วางท่อ HDD',-2,8,70,'อนุมัติ','กลางวัน','ถนนสาธิต MH.03 → MH.04',5,1,'รถเครน 10 ตัน'],
+    ['pjcm',0,'ทีม A สายใต้ดิน','PJ-2601','ร้อยสาย + เชื่อมต่อ',6,6,20,'อนุมัติ','กลางวัน','ถนนสาธิต MH.04 → MH.05',4,1,''],
+    ['pjcm',1,'ทีม C ไลน์แมน','PJ-2603','ปักเสาไฟฟ้า LED',-1,5,100,'อนุมัติ','กลางวัน','',6,0,''],
+    ['pjcm',1,'ทีม C ไลน์แมน','PJ-2602','สำรวจแนวเขตก่อนเดินสาย',1,2,0,'รออนุมัติ','กลางคืน','ย่านเมืองเก่า ถ.ถลาง',3,0,''],
+    ['en',2,'ทีม B โซลาร์','EN-2601','ติดตั้งโครงสร้างแผง',-3,7,80,'อนุมัติ','กลางวัน','',7,2,'รถกระเช้า 12 เมตร'],
+    ['en',2,'ทีม B โซลาร์','EN-2601','ติดตั้งแผงโซลาร์ 550W',4,8,40,'อนุมัติ','กลางวัน','',7,2,''],
+    ['pc',3,'ทีม D โยธา/บ่อปูน','PC-2602','งานเหล็กเสริม + แบบหล่อ',-1,7,35,'อนุมัติ','กลางวัน','',5,0,'รถโม่ปูน'],
   ];
   const daily_plan = dailyTasksSeed.map(r=>{
-    const team = teams[r[1]]; const proj = projects.find(p=>p.code===r[3]);
+    const team = teams[r[1]]; const proj = projects.find(p=>p.code===r[3]); const veh = r[13] ? findItem(r[0], r[13]) : null;
     return { id:genId(), division_id:r[0], plan_date:ymdOffset(r[5]), start_date:ymdOffset(r[5]), team_id:team.id, project_id:proj?proj.id:null,
-      task:r[4], duration:r[6], pct:r[7], created_by:null, created_at:new Date().toISOString() };
+      task:r[4], duration:r[6], pct:r[7], status:r[8], shift:r[9], location_detail:r[10],
+      headcount_male:r[11], headcount_female:r[12], vehicle_item_id:veh?veh.id:null,
+      created_by:null, approved_by:null, approved_at:null, created_at:new Date().toISOString() };
   });
 
   const milestoneSeed = [
@@ -355,8 +368,11 @@ function buildMockDb(){
     return { id:genId(), project_id:proj.id, entry_date:ymdOffset(-Math.floor(Math.random()*10)), category:r[1], cost_code:'', item:r[2], vendor:r[3],
       qty:r[4], unit_price:r[5], amount:r[4]*r[5], status:r[6], note:'', created_by:null, approved_by:null, approved_at:null, created_at:new Date().toISOString() }; });
 
+  const enCraneItem = findItem('en','รถกระเช้า 12 เมตร');
+  const pjHddItem = findItem('pjcm','เครื่อง HDD เจาะดันท่อ');
   const requisitions = [
-    { id:genId(), project_id:projects.find(p=>p.code==='EN-2601').id, division_id:'en', team_id:teams[2].id, kind:'รถ', item:'รถเครน 10 ตัน', reason:'ยกแผงโซลาร์ขึ้นโครงสร้าง', detail:'', when_date:ymdOffset(2), status:'รออนุมัติ', created_by:null, approved_by:null, approved_at:null, created_at:new Date().toISOString() },
+    { id:genId(), project_id:projects.find(p=>p.code==='EN-2601').id, division_id:'en', team_id:teams[2].id, kind:'รถ', item_id:enCraneItem?enCraneItem.id:null, item:'รถกระเช้า 12 เมตร', reason:'ยกแผงโซลาร์ขึ้นโครงสร้าง', detail:'', when_date:ymdOffset(2), status:'รออนุมัติ', created_by:null, approved_by:null, approved_at:null, returned_at:null, returned_by:null, return_note:null, created_at:new Date().toISOString() },
+    { id:genId(), project_id:projects.find(p=>p.code==='PJ-2601').id, division_id:'pjcm', team_id:teams[0].id, kind:'เครื่องมือ', item_id:pjHddItem?pjHddItem.id:null, item:'เครื่อง HDD เจาะดันท่อ', reason:'เจาะดันท่อ HDD ช่วง MH.03-04', detail:'', when_date:ymdOffset(-2), status:'อนุมัติ', created_by:null, approved_by:null, approved_at:new Date().toISOString(), returned_at:null, returned_by:null, return_note:null, created_at:new Date().toISOString() },
   ];
 
   const targets = [
@@ -378,7 +394,7 @@ function buildMockDb(){
   ];
 
   return { divisions, profiles, projects, project_monthly, financials:[], scurve:[], losses:[], stock:[],
-    milestones, cost_entries, teams, daily_plan, attachments:[], requisitions, field_reports:[], targets, audit_log, project_tasks };
+    milestones, cost_entries, teams, daily_plan, attachments:[], requisitions, field_reports:[], targets, audit_log, project_tasks, item_catalog };
 }
 const MOCK_DB = DEMO_MODE ? buildMockDb() : null;
 
@@ -624,7 +640,7 @@ function subnavConfig(){
     return tabs;
   }
   const tabs=[['overview','ภาพรวมฝ่าย'],['projects','โครงการ']];
-  if(isAdmin||['pm','manager','eng','field'].includes(role)){ tabs.push(['plan','วางแผน'],['team','ทีม'],['req','เบิกของ']); }
+  if(isAdmin||['pm','manager','eng','field'].includes(role)){ tabs.push(['plan','วางแผน'],['team','ทีม'],['ops','ปฏิบัติงาน']); }
   if(isAdmin||role==='pm'||role==='manager'||role==='accountant'){ tabs.push(['cost','ต้นทุน']); }
   return tabs;
 }
@@ -673,7 +689,7 @@ async function go(){
       else if(sub==='plan') await renderPlanPage();
       else if(sub==='cost') await renderCostPage();
       else if(sub==='team') await renderTeamPage();
-      else if(sub==='req') await renderRequisitionsPage();
+      else if(sub==='ops') await renderOpsPage();
       else if(sub==='form') await renderProjectForm();
     }
   }catch(ex){ content('<div class="card"><div class="empty">เกิดข้อผิดพลาด: '+esc(ex.message)+'</div></div>'); }
@@ -973,7 +989,7 @@ async function renderDivOverview(){
   const { data: teams } = await sb.from('teams').select('*').eq('division_id',state.ws).order('name');
   state.cache.teams = teams||[];
   const todayYm = currentMonth();
-  const { data: dpRows } = await sb.from('daily_plan').select('team_id').eq('division_id',state.ws).gte('plan_date',todayYm+'-01').lte('plan_date',todayYm+'-31');
+  const { data: dpRows } = await sb.from('daily_plan').select('team_id').eq('division_id',state.ws).eq('status','อนุมัติ').gte('plan_date',todayYm+'-01').lte('plan_date',todayYm+'-31');
   const divTeams = (teams||[]).map(t=>{
     const n = (dpRows||[]).filter(r=>r.team_id===t.id).length;
     return { t, util: Math.max(4,Math.min(100, Math.round(n/20*100))) };
@@ -1342,7 +1358,7 @@ async function planDay(D){
   const N = new Date(baseYear, baseMonth+1, 0).getDate(); // days in this calendar month
   const winEnd = new Date(baseYear, baseMonth, N);
   const fetchFrom = ymd(addDays(winStart,-60));
-  const { data: rows } = await sb.from('daily_plan').select('*').eq('division_id',state.ws)
+  const { data: rows } = await sb.from('daily_plan').select('*').eq('division_id',state.ws).eq('status','อนุมัติ')
     .gte('start_date', fetchFrom).lte('start_date', ymd(winEnd)).order('created_at');
   const body = document.getElementById('planBody');
   if(!body) return; // user navigated away from Plan page before this fetch finished — don't crash writing into a gone element
@@ -1443,7 +1459,7 @@ async function planDay(D){
 async function planMonth(D){
   const year = new Date().getFullYear();
   const from = year+'-01-01', to = year+'-12-31';
-  const { data: rows } = await sb.from('daily_plan').select('team_id,plan_date').eq('division_id',state.ws).gte('plan_date',from).lte('plan_date',to);
+  const { data: rows } = await sb.from('daily_plan').select('team_id,plan_date').eq('division_id',state.ws).eq('status','อนุมัติ').gte('plan_date',from).lte('plan_date',to);
   const teams = state.cache.teams;
   const body = document.getElementById('planBody');
   if(!body) return; // user navigated away from Plan page before this fetch finished — don't crash writing into a gone element
@@ -1540,7 +1556,7 @@ async function renderTeamPage(){
   const { data: rows, error } = await sb.from('teams').select('*').eq('division_id',state.ws).order('name');
   if(error){ content('<div class="page"><div class="card"><div class="empty">'+esc(error.message)+'</div></div></div>'); return; }
   const todayYm = currentMonth();
-  const { data: dpRows } = await sb.from('daily_plan').select('team_id,task').eq('division_id',state.ws).gte('plan_date',todayYm+'-01').lte('plan_date',todayYm+'-31').order('created_at',{ascending:false});
+  const { data: dpRows } = await sb.from('daily_plan').select('team_id,task').eq('division_id',state.ws).eq('status','อนุมัติ').gte('plan_date',todayYm+'-01').lte('plan_date',todayYm+'-31').order('created_at',{ascending:false});
   let html = '<div class="page">'+
     (canWrite(state.ws) ? '<div style="margin-bottom:14px"><button class="btn btn-primary btn-sm" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="openTeam()">+ เพิ่มทีม</button></div>' : '')+
     (!rows.length ? '<div class="card"><div class="empty">ยังไม่มีทีมงาน'+(canWrite(state.ws)?'':'')+'</div></div>' :
@@ -1563,26 +1579,105 @@ async function renderTeamPage(){
 }
 
 /* ============================================================
- * REQUISITIONS — เบิกของ/รถ/เครื่องมือ (field/eng ส่ง, pm/manager/admin อนุมัติ)
+ * ปฏิบัติงาน (OPERATIONS) — วันนี้ / ส่งแผนพรุ่งนี้ / เบิกของ / คลังไอเทม / รายงานผล / รออนุมัติ
  * ============================================================ */
 const REQ_KIND_ICON = {'รถ':'🚛','เครื่องมือ':'🛠️','วัสดุ':'📦'};
 function reqStatusPill(s){
-  const map={'รออนุมัติ':{c:'#D97706',bg:'var(--amber-soft)'},'อนุมัติ':{c:'#0D9488',bg:'var(--teal-soft)'},'ปฏิเสธ':{c:'#DC2626',bg:'var(--red-soft)'}};
+  const map={'รออนุมัติ':{c:'#D97706',bg:'var(--amber-soft)'},'อนุมัติ':{c:'#0D9488',bg:'var(--teal-soft)'},'ปฏิเสธ':{c:'#DC2626',bg:'var(--red-soft)'},'คืนแล้ว':{c:'#2F6FED',bg:'var(--blue-soft)'}};
   const m=map[s]||map['รออนุมัติ'];
   return '<span class="pill" style="color:'+m.c+';background:'+m.bg+'">'+esc(s)+'</span>';
 }
-async function renderRequisitionsPage(){
+async function renderOpsPage(){
   const D = divCfg(state.ws);
   await loadAllProjects();
+  const { data: teams } = await sb.from('teams').select('*').eq('division_id',state.ws).order('name');
+  state.cache.teams = teams||[];
+  if(!state.opsTab) state.opsTab = 'today';
+  const tabs = [['today','งานวันนี้'],['submit','ส่งแผนพรุ่งนี้'],['req','เบิกของ'],['items','คลังไอเทม'],['reports','รายงานผล']];
+  if(canApproveReq()) tabs.push(['approvals','รออนุมัติ']);
+  let html = '<div class="page wide">'+
+    '<div style="display:flex;background:#fff;border:1px solid var(--line);border-radius:16px;padding:3px;margin-bottom:14px;flex-wrap:wrap;gap:2px">'+
+    tabs.map(t=>'<button onclick="switchOpsTab(\''+t[0]+'\')" style="padding:7px 16px;border:none;border-radius:12px;font-family:inherit;font-size:12px;font-weight:'+(state.opsTab===t[0]?600:500)+';cursor:pointer;background:'+(state.opsTab===t[0]?D.acc:'transparent')+';color:'+(state.opsTab===t[0]?'#fff':'#5B6B84')+'">'+t[1]+'</button>').join('')+
+    '</div><div id="opsBody"></div></div>';
+  content(html);
+  if(state.opsTab==='today') await renderOpsToday(D);
+  else if(state.opsTab==='submit') await renderOpsSubmit(D);
+  else if(state.opsTab==='req') await renderOpsReq(D);
+  else if(state.opsTab==='items') await renderOpsItems(D);
+  else if(state.opsTab==='reports') await renderOpsReports(D);
+  else if(state.opsTab==='approvals') await renderOpsApprovals(D);
+}
+function switchOpsTab(t){ state.opsTab=t; renderOpsPage(); }
+
+/* ---------- งานวันนี้ ---------- */
+async function renderOpsToday(D){
+  const today = new Date().toISOString().slice(0,10);
+  const { data: rows } = await sb.from('daily_plan').select('*').eq('division_id',state.ws).eq('plan_date',today).eq('status','อนุมัติ').order('created_at');
+  const body = document.getElementById('opsBody'); if(!body) return;
+  if(!rows||!rows.length){ body.innerHTML='<div class="card"><div class="empty">ยังไม่มีงานที่ได้รับมอบหมายวันนี้</div></div>'; return; }
+  const byTeam = {}; rows.forEach(r=>{ (byTeam[r.team_id||'-']=byTeam[r.team_id||'-']||[]).push(r); });
+  body.innerHTML = '<div class="card" style="padding:0;overflow:hidden">'+Object.keys(byTeam).map(tid=>{
+    const team = state.cache.teams.find(t=>t.id===tid);
+    return '<div style="padding:12px 18px;background:'+D.soft+';display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--line)">'+
+      '<div style="width:26px;height:26px;border-radius:9px;background:'+D.acc+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff">'+esc((team?team.name:'-').charAt(0))+'</div>'+
+      '<span style="font-size:13px;font-weight:700;color:var(--ink)">'+esc(team?team.name:'ไม่ระบุทีม')+'</span></div>'+
+      byTeam[tid].map(r=>{ const proj=state.projects.find(p=>p.id===r.project_id); const pct=Math.max(0,Math.min(100,+r.pct||0));
+        return '<div style="display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid #EEF1F8;flex-wrap:wrap">'+
+          '<div style="flex:1;min-width:180px"><div style="font-size:12.5px;font-weight:600;color:var(--ink)">'+esc(r.task)+'</div>'+
+          '<div style="font-size:10.5px;color:var(--muted2)">'+esc(proj?proj.code:'-')+(r.location_detail?' · '+esc(r.location_detail):'')+' · '+esc(r.shift||'กลางวัน')+'</div></div>'+
+          '<span style="font-size:11px;font-weight:700;color:'+D.acc+'">'+pct+'%</span>'+
+          '<button class="btn btn-primary btn-sm" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="openFieldReport(\''+r.id+'\',\''+(r.project_id||'')+'\',\''+(r.team_id||'')+'\')">📝 รายงานผล</button>'+
+          '</div>';
+      }).join('');
+  }).join('')+'</div>';
+}
+
+/* ---------- ส่งแผนพรุ่งนี้ (รออนุมัติ) ---------- */
+async function renderOpsSubmit(D){
+  const body = document.getElementById('opsBody'); if(!body) return;
+  const { data: items } = await sb.from('item_catalog').select('*').eq('division_id',state.ws).eq('kind','รถ').eq('active',true).order('name');
+  const teamOpts = (state.cache.teams||[]).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
+  const projOpts = state.projects.filter(p=>p.division_id===state.ws).map(p=>'<option value="'+p.id+'">'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
+  const vehOpts = '<option value="">— ไม่ใช้รถ —</option>'+(items||[]).map(i=>'<option value="'+i.id+'">'+esc(i.name)+'</option>').join('');
+  body.innerHTML = '<div class="card" style="max-width:640px"><div class="card-t" style="margin-bottom:14px">ส่งแผนงานวันพรุ่งนี้ (รอ PM อนุมัติ)</div>'+
+    '<div class="row r2"><div class="field"><label>ทีม</label><select id="sp_team">'+(teamOpts||'<option value="">— ยังไม่มีทีม —</option>')+'</select></div>'+
+    '<div class="field"><label>กะ</label><select id="sp_shift"><option>กลางวัน</option><option>กลางคืน</option></select></div></div>'+
+    '<div class="field"><label>โครงการ</label><select id="sp_proj">'+projOpts+'</select></div>'+
+    '<div class="field"><label>วันที่ปฏิบัติงาน</label><input id="sp_date" type="date" value="'+ymdOffset(1)+'"></div>'+
+    '<div class="field"><label>งานที่จะทำ</label><input id="sp_task" placeholder="เช่น ลงท่อ + กลบบ่อ"></div>'+
+    '<div class="field"><label>ตำแหน่งงาน (ถนน/บ่อพัก)</label><input id="sp_loc" placeholder="เช่น ถนนสาธิต MH.03 → MH.04"></div>'+
+    '<div class="row r3"><div class="field"><label>ระยะ (วัน)</label><input id="sp_dur" type="number" value="1"></div>'+
+    '<div class="field"><label>คนงานชาย</label><input id="sp_male" type="number" value="0"></div>'+
+    '<div class="field"><label>คนงานหญิง</label><input id="sp_female" type="number" value="0"></div></div>'+
+    '<div class="field"><label>รถที่ใช้</label><select id="sp_veh">'+vehOpts+'</select></div>'+
+    '<button class="btn btn-primary" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="saveSubmitPlan()">ส่งแผนรออนุมัติ</button>'+
+    '</div>';
+}
+async function saveSubmitPlan(){
+  const g=k=>(document.getElementById(k)||{}).value;
+  const task = g('sp_task').trim();
+  if(!task){ toast('กรอกงานที่จะทำ','err'); return; }
+  const { data:{ user } } = await sb.auth.getUser();
+  const rec = { division_id:state.ws, plan_date:g('sp_date'), start_date:g('sp_date'), team_id:g('sp_team')||null, project_id:g('sp_proj')||null,
+    task, shift:g('sp_shift'), location_detail:g('sp_loc'), duration:+g('sp_dur')||1, pct:0,
+    headcount_male:+g('sp_male')||0, headcount_female:+g('sp_female')||0, vehicle_item_id:g('sp_veh')||null,
+    status:'รออนุมัติ', created_by:user.id };
+  const { error } = await sb.from('daily_plan').insert(rec);
+  if(error){ toast(error.message,'err'); return; }
+  toast('ส่งแผนเรียบร้อย รอ PM อนุมัติ','ok'); renderOpsPage();
+}
+
+/* ---------- เบิกของ (อ้างอิงคลังไอเทมจริง + คืนของ) ---------- */
+async function renderOpsReq(D){
   const projIds = state.projects.filter(p=>p.division_id===state.ws).map(p=>p.id);
   const { data: rows, error } = await sb.from('requisitions').select('*').in('project_id', projIds.length?projIds:['00000000-0000-0000-0000-000000000000']).order('created_at',{ascending:false});
-  if(error){ content('<div class="page"><div class="card"><div class="empty">'+esc(error.message)+'<br><br>ถ้าเห็นข้อความ "relation \\"requisitions\\" does not exist" แปลว่ายังไม่ได้รัน schema_fieldwork.sql ในฐานข้อมูล</div></div></div>'); return; }
+  const body = document.getElementById('opsBody'); if(!body) return;
+  if(error){ body.innerHTML='<div class="card"><div class="empty">'+esc(error.message)+'<br><br>ถ้าเห็น "does not exist" แปลว่ายังไม่ได้รัน schema_fieldwork.sql/schema_operations.sql</div></div>'; return; }
   state.cache.reqRows = rows||[];
   const pending = (rows||[]).filter(r=>r.status==='รออนุมัติ').length;
-  let html = '<div class="page wide">'+
-    '<div class="grid g3" style="margin-bottom:14px">'+
+  body.innerHTML = '<div class="grid g3" style="margin-bottom:14px">'+
       kpi('รออนุมัติ', pending, 'รายการ')+
-      kpi('อนุมัติแล้ว', (rows||[]).filter(r=>r.status==='อนุมัติ').length, 'รายการ')+
+      kpi('อนุมัติแล้ว (ถืออยู่)', (rows||[]).filter(r=>r.status==='อนุมัติ').length, 'รายการ')+
       kpi('ทั้งหมด', (rows||[]).length, 'รายการ')+
     '</div>'+
     (canSubmitField(state.ws) ? '<div style="margin-bottom:14px"><button class="btn btn-primary btn-sm" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="openRequisition()">+ ขอเบิกของ/รถ/เครื่องมือ</button></div>' : '')+
@@ -1590,17 +1685,20 @@ async function renderRequisitionsPage(){
     (!rows||!rows.length ? '<div class="empty">ยังไม่มีรายการเบิก</div>' :
     '<div class="table-wrap" style="border:none;border-radius:0"><table><thead><tr><th>วันที่</th><th>โครงการ</th><th>ประเภท</th><th>รายการ</th><th>เหตุผล</th><th>สถานะ</th><th></th></tr></thead><tbody>'+
     rows.map(r=>{ const proj=state.projects.find(p=>p.id===r.project_id);
+      const canReturn = r.status==='อนุมัติ' && ['รถ','เครื่องมือ'].includes(r.kind) && canApproveReq();
       return '<tr><td>'+thDate(r.when_date)+'</td><td>'+esc(proj?proj.code:'-')+'</td>'+
       '<td>'+(REQ_KIND_ICON[r.kind]||'')+' '+esc(r.kind)+'</td><td>'+esc(r.item)+'</td><td>'+esc(r.reason||'-')+'</td>'+
       '<td>'+reqStatusPill(r.status)+'</td>'+
       '<td>'+(r.status==='รออนุมัติ'&&canApproveReq() ?
         '<button class="btn btn-primary btn-sm" style="--acc:var(--teal);--acc2:#14b8a6" onclick="setReqStatus(\''+r.id+'\',\'อนุมัติ\')">อนุมัติ</button> '+
-        '<button class="btn btn-ghost btn-sm" onclick="setReqStatus(\''+r.id+'\',\'ปฏิเสธ\')">ปฏิเสธ</button>' : '')+'</td></tr>';
+        '<button class="btn btn-ghost btn-sm" onclick="setReqStatus(\''+r.id+'\',\'ปฏิเสธ\')">ปฏิเสธ</button>' : '')+
+      (canReturn ? '<button class="btn btn-ghost btn-sm" onclick="openReturnItem(\''+r.id+'\')">↩️ คืนของ</button>' : '')+'</td></tr>';
     }).join('')+'</tbody></table></div>')+
-    '</div></div>';
-  content(html);
+    '</div>';
 }
-function openRequisition(){
+async function openRequisition(){
+  const { data: items } = await sb.from('item_catalog').select('*').eq('division_id',state.ws).eq('active',true).order('name');
+  state.cache.reqItems = items||[];
   const projOpts = state.projects.filter(p=>p.division_id===state.ws).map(p=>'<option value="'+p.id+'">'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
   const teamOpts = (state.cache.teams||[]).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
   document.getElementById('modalHost').innerHTML =
@@ -1608,42 +1706,193 @@ function openRequisition(){
     '<div class="modal-head"><span class="t">📋 ขอเบิกของ/รถ/เครื่องมือ</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
     '<div class="modal-body">'+
       '<div class="field"><label>โครงการ</label><select id="rq_proj">'+projOpts+'</select></div>'+
-      '<div class="row r2"><div class="field"><label>ประเภท</label><select id="rq_kind"><option>วัสดุ</option><option>เครื่องมือ</option><option>รถ</option></select></div>'+
+      '<div class="row r2"><div class="field"><label>ประเภท</label><select id="rq_kind" onchange="refreshReqItemOptions()"><option>วัสดุ</option><option>เครื่องมือ</option><option>รถ</option></select></div>'+
       '<div class="field"><label>ทีม</label><select id="rq_team">'+(teamOpts||'<option value="">— ไม่ระบุ —</option>')+'</select></div></div>'+
-      '<div class="field"><label>รายการที่ขอเบิก</label><input id="rq_item" placeholder="เช่น รถเครน 10 ตัน"></div>'+
+      '<div class="field"><label>รายการที่ขอเบิก</label><select id="rq_item"></select></div>'+
       '<div class="field"><label>เหตุผล</label><input id="rq_reason" placeholder="เช่น ยกท่อลงบ่อ MH.03"></div>'+
       '<div class="row r2"><div class="field"><label>วันที่ต้องการใช้</label><input id="rq_when" type="date"></div><div class="field"><label>รายละเอียดเพิ่มเติม</label><input id="rq_detail"></div></div>'+
     '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
       '<button class="btn btn-primary" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveRequisition()">ส่งคำขอ</button></div></div></div>';
   document.getElementById('rq_when').value = new Date().toISOString().slice(0,10);
+  refreshReqItemOptions();
+}
+function refreshReqItemOptions(){
+  const kind = (document.getElementById('rq_kind')||{}).value || 'วัสดุ';
+  const sel = document.getElementById('rq_item'); if(!sel) return;
+  const items = (state.cache.reqItems||[]).filter(i=>i.kind===kind);
+  sel.innerHTML = items.length ? items.map(i=>'<option value="'+i.id+'">'+esc(i.name)+(i.unit?' ('+esc(i.unit)+')':'')+'</option>').join('')
+    : '<option value="">— ไม่มีไอเทมประเภทนี้ในคลัง เพิ่มที่แท็บ "คลังไอเทม" ก่อน —</option>';
 }
 async function saveRequisition(){
   const g=k=>(document.getElementById(k)||{}).value;
-  const item = g('rq_item').trim();
-  if(!item){ toast('กรอกรายการที่ขอเบิก','err'); return; }
+  const itemId = g('rq_item');
+  if(!itemId){ toast('เลือกรายการที่ขอเบิก (หรือเพิ่มไอเทมในคลังก่อน)','err'); return; }
+  const item = (state.cache.reqItems||[]).find(i=>i.id===itemId);
   const { data:{ user } } = await sb.auth.getUser();
   const rec = { project_id:g('rq_proj'), division_id:state.ws, team_id:g('rq_team')||null, kind:g('rq_kind'),
-    item, reason:g('rq_reason'), detail:g('rq_detail'), when_date:g('rq_when'), created_by:user.id };
+    item_id:itemId, item: item?item.name:'', reason:g('rq_reason'), detail:g('rq_detail'), when_date:g('rq_when'), created_by:user.id };
   const { error } = await sb.from('requisitions').insert(rec);
   if(error){ toast(error.message,'err'); return; }
-  closeModal(); toast('ส่งคำขอเบิกเรียบร้อย รออนุมัติ','ok'); renderRequisitionsPage();
+  closeModal(); toast('ส่งคำขอเบิกเรียบร้อย รออนุมัติ','ok'); renderOpsPage();
 }
 async function setReqStatus(id, status){
   const rec = { status };
   if(status==='อนุมัติ'){ rec.approved_by = (await sb.auth.getUser()).data.user.id; rec.approved_at = new Date().toISOString(); }
   const { error } = await sb.from('requisitions').update(rec).eq('id', id);
   if(error){ toast(error.message,'err'); return; }
-  toast(status+'เรียบร้อย','ok'); renderRequisitionsPage();
+  toast(status+'เรียบร้อย','ok'); renderOpsPage();
+}
+function openReturnItem(reqId){
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:400px">'+
+    '<div class="modal-head"><span class="t">↩️ บันทึกการคืนของ</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body"><div class="field"><label>หมายเหตุการคืน (ถ้ามี)</label><textarea id="rt_note" rows="2" placeholder="เช่น สภาพปกติ / มีรอยขีดข่วนเล็กน้อย"></textarea></div></div>'+
+    '<div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn btn-primary" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveReturnItem(\''+reqId+'\')">ยืนยันคืนของ</button></div></div></div>';
+}
+async function saveReturnItem(reqId){
+  const { data:{ user } } = await sb.auth.getUser();
+  const note = (document.getElementById('rt_note')||{}).value;
+  const { error } = await sb.from('requisitions').update({ status:'คืนแล้ว', returned_at:new Date().toISOString(), returned_by:user.id, return_note:note }).eq('id', reqId);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('บันทึกการคืนเรียบร้อย','ok'); renderOpsPage();
+}
+
+/* ---------- คลังไอเทม (รถ/เครื่องมือ/วัสดุจริงของฝ่าย) ---------- */
+const ITEM_KIND_ICON = REQ_KIND_ICON;
+async function renderOpsItems(D){
+  const { data: rows, error } = await sb.from('item_catalog').select('*').eq('division_id',state.ws).order('kind').order('name');
+  const body = document.getElementById('opsBody'); if(!body) return;
+  if(error){ body.innerHTML='<div class="card"><div class="empty">'+esc(error.message)+'<br><br>ถ้าเห็น "relation item_catalog does not exist" แปลว่ายังไม่ได้รัน schema_operations.sql</div></div>'; return; }
+  const canManage = canWrite(state.ws);
+  body.innerHTML = (canManage?'<div style="margin-bottom:14px"><button class="btn btn-primary btn-sm" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="openItem()">+ เพิ่มไอเทม</button></div>':'')+
+    (!rows||!rows.length ? '<div class="card"><div class="empty">ยังไม่มีไอเทมในคลัง'+(canManage?' — กด "+ เพิ่มไอเทม" เพื่อเริ่มต้น':'')+'</div></div>' :
+    '<div class="card" style="padding:0;overflow:hidden"><div class="table-wrap" style="border:none"><table><thead><tr><th>ประเภท</th><th>ชื่อ</th><th>หน่วย</th><th>รหัส</th><th>สถานะ</th><th></th></tr></thead><tbody>'+
+    rows.map(it=>'<tr><td>'+(ITEM_KIND_ICON[it.kind]||'')+' '+esc(it.kind)+'</td><td>'+esc(it.name)+'</td><td>'+esc(it.unit||'-')+'</td><td>'+esc(it.code||'-')+'</td>'+
+      '<td>'+(it.active?'<span class="pill" style="background:var(--teal-soft);color:var(--teal)">ใช้งาน</span>':'<span class="pill" style="background:var(--soft);color:var(--muted)">ปิด</span>')+'</td>'+
+      '<td>'+(canManage?'<button class="btn btn-ghost btn-sm" onclick=\'openItem('+JSON.stringify(it)+')\'>แก้ไข</button>':'')+'</td></tr>').join('')+
+    '</tbody></table></div></div>');
+}
+function openItem(it){
+  it = it||{};
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:420px">'+
+    '<div class="modal-head"><span class="t">'+(it.id?'แก้ไขไอเทม':'เพิ่มไอเทมในคลัง')+'</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body">'+
+      '<div class="field"><label>ประเภท</label><select id="it_kind"><option'+(it.kind==='วัสดุ'?' selected':'')+'>วัสดุ</option><option'+(it.kind==='เครื่องมือ'?' selected':'')+'>เครื่องมือ</option><option'+(it.kind==='รถ'?' selected':'')+'>รถ</option></select></div>'+
+      '<div class="field"><label>ชื่อไอเทม</label><input id="it_name" value="'+esc(it.name||'')+'"></div>'+
+      '<div class="row r2"><div class="field"><label>หน่วย</label><input id="it_unit" value="'+esc(it.unit||'')+'"></div><div class="field"><label>รหัส (ถ้ามี)</label><input id="it_code" value="'+esc(it.code||'')+'"></div></div>'+
+      '<div class="field"><label>สถานะ</label><select id="it_active"><option value="true"'+(it.active!==false?' selected':'')+'>ใช้งาน</option><option value="false"'+(it.active===false?' selected':'')+'>ปิดใช้งาน</option></select></div>'+
+    '</div><div class="modal-foot">'+(it.id?'<button class="btn btn-danger" onclick="deleteItem(\''+it.id+'\')">ลบ</button>':'')+
+      '<div style="flex:1"></div><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn btn-primary" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveItem(\''+(it.id||'')+'\')">บันทึก</button></div></div></div>';
+}
+async function saveItem(id){
+  const g=k=>(document.getElementById(k)||{}).value;
+  const name = g('it_name').trim();
+  if(!name){ toast('กรอกชื่อไอเทม','err'); return; }
+  const rec = { division_id:state.ws, kind:g('it_kind'), name, unit:g('it_unit'), code:g('it_code'), active:g('it_active')==='true' };
+  const { error } = id ? await sb.from('item_catalog').update(rec).eq('id',id) : await sb.from('item_catalog').insert(rec);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('บันทึกเรียบร้อย','ok'); renderOpsPage();
+}
+async function deleteItem(id){
+  if(!confirm('ลบไอเทมนี้ออกจากคลัง?')) return;
+  const { error } = await sb.from('item_catalog').delete().eq('id',id);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('ลบแล้ว','ok'); renderOpsPage();
+}
+
+/* ---------- รายงานผลหน้างาน (สรุปรวม + เชื่อมกลับ WBS) ---------- */
+async function renderOpsReports(D){
+  const projIds = state.projects.filter(p=>p.division_id===state.ws).map(p=>p.id);
+  const { data: rows, error } = await sb.from('field_reports').select('*').in('project_id', projIds.length?projIds:['00000000-0000-0000-0000-000000000000']).order('submitted_at',{ascending:false});
+  const body = document.getElementById('opsBody'); if(!body) return;
+  if(error){ body.innerHTML='<div class="card"><div class="empty">'+esc(error.message)+'</div></div>'; return; }
+  body.innerHTML = '<div style="margin-bottom:14px"><button class="btn btn-primary btn-sm" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="openFieldReport(null,null,null)">+ ส่งรายงานใหม่</button></div>'+
+    (!rows||!rows.length ? '<div class="card"><div class="empty">ยังไม่มีรายงานผลหน้างาน</div></div>' :
+    '<div class="grid g2">'+rows.map(r=>{ const proj=state.projects.find(p=>p.id===r.project_id); const team=state.cache.teams.find(t=>t.id===r.team_id);
+      return '<div class="card">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px"><div><span class="badge">'+esc(proj?proj.code:'-')+'</span> <b style="font-size:12.5px">'+esc(team?team.name:'-')+'</b></div><span style="font-size:11px;color:var(--muted)">'+thDate(r.report_date)+'</span></div>'+
+      '<div style="font-size:12px;color:var(--ink2);margin-bottom:6px">⏰ '+esc(r.time_start||'-')+'–'+esc(r.time_end||'-')+' · 👷 '+(r.total_people||0)+' คน · '+esc(r.weather||'-')+'</div>'+
+      '<div style="font-size:12px;color:var(--ink2);margin-bottom:6px">ทำได้: <b>'+fmt(r.qty_done)+' '+esc(r.unit||'')+'</b>'+(r.detail?' — '+esc(r.detail):'')+'</div>'+
+      (r.problem?'<div style="font-size:11.5px;color:var(--red);margin-bottom:6px">⚠️ '+esc(r.problem)+(r.severity?' ('+esc(r.severity)+')':'')+'</div>':'')+
+      ((r.photos||[]).length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+r.photos.map(u=>'<a href="'+esc(u)+'" target="_blank" rel="noopener"><img src="'+esc(u)+'" style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--line)"></a>').join('')+'</div>' : '')+
+      (canWrite(state.ws) && r.project_id ? '<button class="btn btn-ghost btn-sm" onclick="openApplyProgress(\''+r.id+'\',\''+r.project_id+'\')">📊 ใช้ผลนี้อัปเดตงานใน WBS</button>' : '')+
+      '</div>';
+    }).join('')+'</div>');
+}
+async function openApplyProgress(reportId, projectId){
+  const { data: tasks } = await sb.from('project_tasks').select('*').eq('project_id', projectId).order('sort_order');
+  const opts = (tasks||[]).map(t=>'<option value="'+t.id+'">'+esc(t.name)+' (ปัจจุบัน '+Math.round(t.pct||0)+'%)</option>').join('');
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:420px">'+
+    '<div class="modal-head"><span class="t">📊 อัปเดต % ความคืบหน้างาน</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body">'+
+      (opts ? '<div class="field"><label>เลือกงานใน WBS</label><select id="ap_task">'+opts+'</select></div>'+
+        '<div class="field"><label>% ความคืบหน้าใหม่</label><input id="ap_pct" type="number" value="0"></div>'
+        : '<div class="empty">โครงการนี้ยังไม่มีแผนโครงการ (WBS) ให้เลือก</div>')+
+    '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+      (opts?'<button class="btn btn-primary" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveApplyProgress()">บันทึก</button>':'')+'</div></div></div>';
+}
+async function saveApplyProgress(){
+  const taskId = (document.getElementById('ap_task')||{}).value;
+  const pct = +(document.getElementById('ap_pct')||{}).value||0;
+  if(!taskId){ toast('เลือกงาน','err'); return; }
+  const { error } = await sb.from('project_tasks').update({pct}).eq('id',taskId);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('อัปเดตความคืบหน้าเรียบร้อย','ok');
+}
+
+/* ---------- รออนุมัติ (กล่องรวม: แผนงาน + คำขอเบิก) ---------- */
+async function renderOpsApprovals(D){
+  const projIds = state.projects.filter(p=>p.division_id===state.ws).map(p=>p.id);
+  const [{data:plans},{data:reqs}] = await Promise.all([
+    sb.from('daily_plan').select('*').eq('division_id',state.ws).eq('status','รออนุมัติ').order('created_at'),
+    sb.from('requisitions').select('*').in('project_id', projIds.length?projIds:['00000000-0000-0000-0000-000000000000']).eq('status','รออนุมัติ').order('created_at'),
+  ]);
+  const body = document.getElementById('opsBody'); if(!body) return;
+  body.innerHTML = '<div class="grid g2">'+
+    '<div class="card"><div class="card-t" style="margin-bottom:10px">แผนงานรออนุมัติ ('+(plans||[]).length+')</div>'+
+    (!plans||!plans.length ? '<div class="empty">ไม่มีแผนรออนุมัติ</div>' : plans.map(pl=>{
+      const proj=state.projects.find(p=>p.id===pl.project_id); const team=state.cache.teams.find(t=>t.id===pl.team_id);
+      return '<div style="padding:10px 0;border-bottom:1px solid #EEF1F8">'+
+        '<div style="font-size:12.5px;font-weight:600">'+esc(pl.task)+'</div>'+
+        '<div style="font-size:11px;color:var(--muted2);margin-bottom:6px">'+esc(team?team.name:'-')+' · '+esc(proj?proj.code:'-')+' · '+thDate(pl.plan_date)+' · '+esc(pl.shift||'')+'</div>'+
+        '<button class="btn btn-primary btn-sm" style="--acc:var(--teal);--acc2:#14b8a6" onclick="setPlanApproval(\''+pl.id+'\',\'อนุมัติ\')">อนุมัติ</button> '+
+        '<button class="btn btn-ghost btn-sm" onclick="setPlanApproval(\''+pl.id+'\',\'ปฏิเสธ\')">ปฏิเสธ</button></div>';
+    }).join(''))+'</div>'+
+    '<div class="card"><div class="card-t" style="margin-bottom:10px">คำขอเบิกรออนุมัติ ('+(reqs||[]).length+')</div>'+
+    (!reqs||!reqs.length ? '<div class="empty">ไม่มีคำขอเบิกรออนุมัติ</div>' : reqs.map(r=>{
+      const proj=state.projects.find(p=>p.id===r.project_id);
+      return '<div style="padding:10px 0;border-bottom:1px solid #EEF1F8">'+
+        '<div style="font-size:12.5px;font-weight:600">'+(REQ_KIND_ICON[r.kind]||'')+' '+esc(r.item)+'</div>'+
+        '<div style="font-size:11px;color:var(--muted2);margin-bottom:6px">'+esc(proj?proj.code:'-')+' · '+esc(r.reason||'-')+'</div>'+
+        '<button class="btn btn-primary btn-sm" style="--acc:var(--teal);--acc2:#14b8a6" onclick="setReqStatus(\''+r.id+'\',\'อนุมัติ\')">อนุมัติ</button> '+
+        '<button class="btn btn-ghost btn-sm" onclick="setReqStatus(\''+r.id+'\',\'ปฏิเสธ\')">ปฏิเสธ</button></div>';
+    }).join(''))+'</div>'+
+    '</div>';
+}
+async function setPlanApproval(id, status){
+  const rec = { status };
+  if(status==='อนุมัติ'){ rec.approved_by = (await sb.auth.getUser()).data.user.id; rec.approved_at = new Date().toISOString(); }
+  const { error } = await sb.from('daily_plan').update(rec).eq('id', id);
+  if(error){ toast(error.message,'err'); return; }
+  toast(status+'เรียบร้อย','ok'); renderOpsApprovals(divCfg(state.ws));
 }
 
 /* ============================================================
- * FIELD REPORTS — รายงานผลหลังทำงานจริง (พร้อมรูป) เปิดจากปุ่มในหน้า Plan/Day
+ * FIELD REPORTS — รายงานผลหลังทำงานจริง (พร้อมรูป) เปิดจากปุ่มในหน้า Plan/Day หรือแท็บปฏิบัติงาน
  * ============================================================ */
 function openFieldReport(dailyPlanId, projectId, teamId){
+  const needPicker = !dailyPlanId;
+  const projOpts = state.projects.filter(p=>p.division_id===state.ws).map(p=>'<option value="'+p.id+'"'+(p.id===projectId?' selected':'')+'>'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
+  const teamOpts = (state.cache.teams||[]).map(t=>'<option value="'+t.id+'"'+(t.id===teamId?' selected':'')+'>'+esc(t.name)+'</option>').join('');
   document.getElementById('modalHost').innerHTML =
     '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
     '<div class="modal-head"><span class="t">📝 รายงานผลหลังทำงาน</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
     '<div class="modal-body">'+
+      (needPicker ? '<div class="row r2"><div class="field"><label>โครงการ</label><select id="fr_proj">'+projOpts+'</select></div><div class="field"><label>ทีม</label><select id="fr_team">'+(teamOpts||'<option value="">-</option>')+'</select></div></div>' : '')+
       '<div class="row r2"><div class="field"><label>เวลาเริ่ม</label><input id="fr_start" type="time"></div><div class="field"><label>เวลาเลิก</label><input id="fr_end" type="time"></div></div>'+
       '<div class="row r3"><div class="field"><label>คนงาน (คน)</label><input id="fr_labor" type="number" value="0"></div>'+
       '<div class="field"><label>ผู้ควบคุมงาน (คน)</label><input id="fr_supervise" type="number" value="0"></div>'+
@@ -1661,6 +1910,10 @@ function openFieldReport(dailyPlanId, projectId, teamId){
 }
 async function saveFieldReport(dailyPlanId, projectId, teamId){
   const g=k=>(document.getElementById(k)||{}).value;
+  if(!dailyPlanId){ // opened without a specific Gantt task — read project/team from the pickers shown in the modal
+    const pel=document.getElementById('fr_proj'); if(pel) projectId = pel.value;
+    const tel=document.getElementById('fr_team'); if(tel) teamId = tel.value;
+  }
   const btn = document.getElementById('fr_save'); btn.disabled=true; btn.textContent='กำลังบันทึก...';
   try{
     const { data:{ user } } = await sb.auth.getUser();
@@ -1674,6 +1927,7 @@ async function saveFieldReport(dailyPlanId, projectId, teamId){
       photoUrls.push(pub.publicUrl);
     }
     const rec = { daily_plan_id: dailyPlanId||null, project_id: projectId||null, team_id: teamId||null, division_id: state.ws,
+      report_date: new Date().toISOString().slice(0,10),
       time_start:g('fr_start'), time_end:g('fr_end'), labor_count:+g('fr_labor')||0, supervise_count:+g('fr_supervise')||0,
       total_people:+g('fr_total')||0, weather:g('fr_weather'), qty_done:+g('fr_qty')||0, unit:g('fr_unit'),
       detail:g('fr_detail'), problem:g('fr_problem'), severity:g('fr_severity')||null, help_needed:g('fr_help'),
@@ -1681,6 +1935,7 @@ async function saveFieldReport(dailyPlanId, projectId, teamId){
     const { error } = await sb.from('field_reports').insert(rec);
     if(error){ toast(error.message,'err'); return; }
     closeModal(); toast('บันทึกรายงานผลเรียบร้อย','ok');
+    if(state.sub==='ops' && state.opsTab==='reports') renderOpsReports(divCfg(state.ws));
   } finally { btn.disabled=false; btn.textContent='บันทึกรายงาน'; }
 }
 
@@ -2202,7 +2457,7 @@ async function saveDailyTask(date){
   if(!task){ toast('กรอกชื่องาน','err'); return; }
   const { data:{ user } } = await sb.auth.getUser();
   const rec = { division_id:state.ws, plan_date:date, team_id:g('dt_team')||null, project_id:g('dt_proj')||null,
-    task, start_date:g('dt_start')||date, duration:+g('dt_dur')||1, pct:+g('dt_pct')||0, created_by:user.id };
+    task, start_date:g('dt_start')||date, duration:+g('dt_dur')||1, pct:+g('dt_pct')||0, status:'อนุมัติ', created_by:user.id };
   const { error } = await sb.from('daily_plan').insert(rec);
   if(error){ toast(error.message,'err'); return; }
   closeModal(); toast('มอบหมายงานเรียบร้อย','ok'); planDay(divCfg(state.ws));
