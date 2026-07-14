@@ -180,6 +180,15 @@ td.num,th.num{text-align:right}
 .rowlink:hover{color:var(--teal)}
 .empty{text-align:center;color:var(--muted);padding:42px 20px;font-size:13px}
 
+/* ---------- ตารางแก้ไข WBS แบบ Excel (input/select ในแต่ละ cell) ---------- */
+.wbs-table td{padding:2px 4px;white-space:nowrap}
+.wbs-in{width:100%;border:1px solid transparent;background:transparent;padding:7px 8px;border-radius:8px;
+  font-family:inherit;font-size:12.5px;color:var(--ink2);transition:border-color .1s,background .1s}
+.wbs-in:hover{border-color:var(--line2)}
+.wbs-in:focus{outline:none;border-color:var(--teal);background:#fff;box-shadow:0 0 0 2px var(--teal-soft)}
+select.wbs-in{cursor:pointer}
+input[type=date].wbs-in,input[type=number].wbs-in{text-align:right}
+
 .form-section{border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:14px;background:#F7F9FD}
 .form-section-t{font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--teal);margin-bottom:12px;text-transform:uppercase;letter-spacing:.04em}
 .row{display:grid;gap:14px}
@@ -1499,11 +1508,143 @@ function toggleWbsNode(id){
 function renderProjectWBS(c, p, D, editable){
   if(!state.cache.wbsCollapsed) state.cache.wbsCollapsed = new Set();
   const tasks = c.tasks||[];
-  const addBtn = editable ? '<button class="btn btn-primary btn-sm" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="openProjectTask(\''+p.id+'\')">+ เพิ่มงาน</button>' : '';
-  if(!tasks.length) return '<div style="margin-bottom:12px">'+addBtn+'</div><div class="empty">ยังไม่มีแผนโครงการ (WBS)</div>';
-
-  const tree = buildTaskTree(tasks);
-  tree.forEach(rollupNode);
+  let out = renderWbsGridTable(tasks, p.id, D, editable);
+  if(tasks.length) out += '<div style="margin-top:16px">'+renderWbsGanttChart(tasks, D)+'</div>';
+  return out;
+}
+/* ---------- ตารางแก้ไข WBS แบบ Excel: พิมพ์ตรง cell, Tab เลื่อนช่อง (DOM order เดิมของ browser),
+   Enter เลื่อนลงแถวถัดไป (แถวสุดท้ายกด Enter = เพิ่มแถวใหม่อัตโนมัติ), วางข้อมูลหลายแถวจาก Excel ได้ที่ช่องชื่องาน ---------- */
+function renderWbsGridTable(tasks, projId, D, editable){
+  const addRow = editable ? '<div style="padding:10px 2px 0"><button class="btn btn-ghost btn-sm" onclick="addWbsRow(\''+projId+'\')">+ เพิ่มแถว</button>'+
+    (tasks.length ? ' <span style="font-size:11px;color:var(--muted2);margin-left:6px">พิมพ์ตรง cell ได้เลย · Tab/Enter เลื่อนช่อง · วางข้อมูลจาก Excel ที่ช่องชื่องานได้</span>' : '')+'</div>' : '';
+  if(!tasks.length) return '<div class="card"><div class="empty">ยังไม่มีแผนโครงการ (WBS)</div></div>'+addRow;
+  const tree = buildTaskTree(tasks); tree.forEach(rollupNode);
+  const flat = flattenTree(tree, 0, new Set()); // ตารางแก้ไขกางดูครบทุกแถวเสมอ (ย่อ/ขยายอยู่ที่ผังแกนต์ด้านล่างแทน)
+  const rows = flat.map(({node,depth})=>{
+    const isSummary = node.children.length>0;
+    const parentOpts = '<option value="">— งานหลัก —</option>'+tasks.filter(t=>t.id!==node.id).map(t=>'<option value="'+t.id+'"'+(node.parent_id===t.id?' selected':'')+'>'+esc(t.name)+'</option>').join('');
+    const nameCell = editable
+      ? '<input class="wbs-in" data-tid="'+node.id+'" data-f="name" value="'+esc(node.name)+'" style="padding-left:'+(6+depth*16)+'px;font-weight:'+(isSummary?700:500)+'" onkeydown="wbsCellKey(event,this)" onblur="wbsCellSave(this)" onpaste="wbsCellPaste(event,this)">'
+      : '<span style="display:block;padding-left:'+(6+depth*16)+'px;font-weight:'+(isSummary?700:500)+'">'+esc(node.name)+'</span>';
+    const parentCell = editable
+      ? '<select class="wbs-in" data-tid="'+node.id+'" data-f="parent_id" onkeydown="wbsCellKey(event,this)" onchange="wbsCellSave(this)">'+parentOpts+'</select>'
+      : '<span style="color:var(--muted)">'+(node.parent_id?esc((tasks.find(t=>t.id===node.parent_id)||{}).name||'-'):'—')+'</span>';
+    let dateCell, durCell, pctCell;
+    if(isSummary){
+      const r = node._roll;
+      dateCell = '<span class="tnum" style="color:var(--muted)">'+thDate(ymd(r.start))+'</span>';
+      durCell = '<span class="tnum" style="color:var(--muted)">'+r.dur+'</span>';
+      pctCell = '<span class="tnum" style="color:'+D.acc+';font-weight:700">'+Math.round(r.pct)+'% <span style="font-size:9.5px;color:var(--muted2);font-weight:500">รวม</span></span>';
+    } else if(editable){
+      dateCell = '<input type="date" class="wbs-in tnum" data-tid="'+node.id+'" data-f="start_date" value="'+esc(node.start_date)+'" onkeydown="wbsCellKey(event,this)" onblur="wbsCellSave(this)">';
+      durCell = '<input type="number" class="wbs-in tnum" data-tid="'+node.id+'" data-f="duration" value="'+(node.duration||1)+'" min="1" onkeydown="wbsCellKey(event,this)" onblur="wbsCellSave(this)">';
+      pctCell = '<input type="number" class="wbs-in tnum" data-tid="'+node.id+'" data-f="pct" value="'+(node.pct||0)+'" min="0" max="100" onkeydown="wbsCellKey(event,this)" onblur="wbsCellSave(this)">';
+    } else {
+      dateCell = '<span class="tnum">'+thDate(node.start_date)+'</span>';
+      durCell = '<span class="tnum">'+(node.duration||1)+'</span>';
+      pctCell = '<span class="tnum">'+Math.round(node.pct||0)+'%</span>';
+    }
+    return '<tr>'+
+      '<td>'+nameCell+'</td>'+
+      '<td>'+parentCell+'</td>'+
+      '<td class="num">'+dateCell+'</td>'+
+      '<td class="num">'+durCell+'</td>'+
+      '<td class="num">'+pctCell+'</td>'+
+      (editable ? '<td class="num"><button class="btn btn-ghost btn-sm" style="padding:2px 8px" onclick="deleteProjectTask(\''+node.id+'\',\''+projId+'\')" title="ลบแถว">🗑</button></td>' : '')+
+    '</tr>';
+  }).join('');
+  return '<div class="card wbs-table" style="padding:0;overflow:hidden"><div class="table-wrap" style="border:none"><table><thead><tr>'+
+    '<th style="min-width:220px">ชื่องาน</th><th style="min-width:150px">อยู่ภายใต้</th><th class="num">เริ่มวันที่</th><th class="num">ระยะ(วัน)</th><th class="num">%</th>'+(editable?'<th></th>':'')+
+    '</tr></thead><tbody id="wbsGridBody">'+rows+'</tbody></table></div></div>'+addRow;
+}
+function wbsCellKey(e, el){
+  if(e.key==='Enter'){ e.preventDefault(); el.blur(); moveWbsFocus(el, 1); }
+}
+function moveWbsFocus(fromEl, rowDelta){
+  const field = fromEl.dataset.f;
+  const rows = Array.from(document.querySelectorAll('#wbsGridBody tr'));
+  const idx = rows.indexOf(fromEl.closest('tr'));
+  const targetRow = rows[idx+rowDelta];
+  if(!targetRow){ if(rowDelta>0 && state.cache.proj) addWbsRow(state.cache.proj.p.id); return; }
+  const targetInput = targetRow.querySelector('[data-f="'+field+'"]') || targetRow.querySelector('[data-f="name"]');
+  if(targetInput) targetInput.focus();
+}
+async function wbsCellSave(el){
+  const tid = el.dataset.tid, f = el.dataset.f;
+  let v = el.value;
+  if(f==='name' && !v.trim()){ toast('ชื่องานห้ามว่าง','err'); el.focus(); return; }
+  if(f==='duration') v = +v||1;
+  if(f==='pct') v = Math.max(0, Math.min(100, +v||0));
+  if(f==='parent_id') v = v||null;
+  const rec = {}; rec[f] = v;
+  const { error } = await sb.from('project_tasks').update(rec).eq('id',tid);
+  if(error){ toast(error.message,'err'); return; }
+  await refreshWbs();
+}
+async function wbsCellPaste(e, el){
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if(!text || !/[\t\n]/.test(text.trim())) return; // ค่าเดียว ปล่อยให้ paste ปกติทำงาน
+  e.preventDefault();
+  const c = state.cache.proj; if(!c) return;
+  const projId = c.p.id;
+  const rowsText = text.split(/\r?\n/).filter(l=>l.trim().length);
+  const allRows = Array.from(document.querySelectorAll('#wbsGridBody tr'));
+  const startIdx = allRows.findIndex(tr=>{ const n=tr.querySelector('[data-f="name"]'); return n && n.dataset.tid===el.dataset.tid; });
+  const { data:{ user } } = await sb.auth.getUser();
+  for(let i=0;i<rowsText.length;i++){
+    const [name, startDate, duration, pct] = rowsText[i].split('\t');
+    const targetTr = allRows[startIdx+i];
+    if(targetTr){
+      const tid = targetTr.querySelector('[data-f="name"]').dataset.tid;
+      const rec = {};
+      if(name!=null && name.trim()) rec.name = name.trim();
+      if(startDate) rec.start_date = normalizeWbsDate(startDate);
+      if(duration) rec.duration = +duration||1;
+      if(pct) rec.pct = Math.max(0, Math.min(100, +String(pct).replace('%','')||0));
+      if(Object.keys(rec).length) await sb.from('project_tasks').update(rec).eq('id',tid);
+    } else {
+      await sb.from('project_tasks').insert({ project_id:projId, parent_id:null, name:(name||'งานใหม่').trim(),
+        start_date: startDate?normalizeWbsDate(startDate):new Date().toISOString().slice(0,10),
+        duration:+duration||1, pct: pct?Math.max(0,Math.min(100,+String(pct).replace('%','')||0)):0,
+        sort_order:(c.tasks||[]).length+i, created_by:user.id });
+    }
+  }
+  toast('วางข้อมูล '+rowsText.length+' แถวเรียบร้อย','ok');
+  await refreshWbs();
+}
+function normalizeWbsDate(s){
+  s = (s||'').trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const d = new Date(s);
+  return isNaN(d) ? new Date().toISOString().slice(0,10) : d.toISOString().slice(0,10);
+}
+async function addWbsRow(projId){
+  const c = state.cache.proj; if(!c) return;
+  const { data:{ user } } = await sb.auth.getUser();
+  const rec = { project_id:projId, parent_id:null, name:'งานใหม่', start_date:new Date().toISOString().slice(0,10), duration:1, pct:0, sort_order:(c.tasks||[]).length, created_by:user.id };
+  const { data, error } = await sb.from('project_tasks').insert(rec).select().single();
+  if(error){ toast(error.message,'err'); return; }
+  await refreshWbs();
+  const el = document.querySelector('.wbs-in[data-tid="'+data.id+'"][data-f="name"]');
+  if(el){ el.focus(); el.select(); }
+}
+async function refreshWbs(){
+  const c = state.cache.proj; if(!c) return;
+  const { data: tasks } = await sb.from('project_tasks').select('*').eq('project_id', c.p.id).order('sort_order');
+  c.tasks = tasks||[];
+  const host = document.getElementById('projTabBody'); if(!host || state.projTab!=='wbs') return;
+  host.innerHTML = renderProjectWBS(c, c.p, divCfg(state.ws), canWrite(c.p.division_id));
+}
+async function deleteProjectTask(taskId, projId){
+  if(!confirm('ลบงานนี้? (งานย่อยภายใต้งานนี้จะถูกลบด้วย)')) return;
+  const { error } = await sb.from('project_tasks').delete().eq('id',taskId);
+  if(error){ toast(error.message,'err'); return; }
+  toast('ลบแล้ว','ok'); refreshWbs();
+}
+/* ---------- ผังแกนต์ (อ่านอย่างเดียว, rollup งานสรุปอัตโนมัติจากงานย่อย) ---------- */
+function renderWbsGanttChart(tasks, D){
+  if(!state.cache.wbsCollapsed) state.cache.wbsCollapsed = new Set();
+  const tree = buildTaskTree(tasks); tree.forEach(rollupNode);
   const flat = flattenTree(tree, 0, state.cache.wbsCollapsed);
   let winStart=null, winEnd=null;
   tree.forEach(n=>{ if(!winStart||n._roll.start<winStart) winStart=n._roll.start; if(!winEnd||n._roll.end>winEnd) winEnd=n._roll.end; });
@@ -1513,7 +1654,7 @@ function renderProjectWBS(c, p, D, editable){
   const today = new Date(); today.setHours(0,0,0,0);
   const todayIdx = Math.round((today-winStart)/86400000);
 
-  let labelCol = '<div style="height:40px;display:flex;align-items:flex-end;padding-bottom:8px;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--line);margin-bottom:6px">รายการงาน</div>';
+  let labelCol = '<div style="height:40px;display:flex;align-items:flex-end;padding-bottom:8px;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--line);margin-bottom:6px">ผังแกนต์</div>';
   let gridRows = '';
   flat.forEach(({node,depth})=>{
     const r = node._roll; const isSummary = node.children.length>0;
@@ -1525,7 +1666,6 @@ function renderProjectWBS(c, p, D, editable){
       (node.children.length ? '<span style="cursor:pointer;font-size:10px;color:var(--muted);width:12px;flex-shrink:0" onclick="toggleWbsNode(\''+node.id+'\')">'+(collapsed?'▶':'▼')+'</span>' : '<span style="width:12px;flex-shrink:0"></span>')+
       '<div style="flex:1;min-width:0"><div style="font-size:'+(isSummary?'12.5px':'12px')+';font-weight:'+(isSummary?700:500)+';color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(node.name)+'</div></div>'+
       '<span style="font-size:10.5px;font-weight:700;color:'+(r.pct>=100?'#0D9488':D.acc)+';font-family:var(--disp);flex-shrink:0">'+Math.round(r.pct)+'%</span>'+
-      (editable ? '<button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:10px;flex-shrink:0" onclick="openProjectTaskEdit(\''+p.id+'\',\''+node.id+'\')">✎</button>' : '')+
       '</div>';
     let cells=''; for(let i=0;i<N;i++){ cells+='<div style="height:100%"></div>'; }
     const barColor = isSummary ? '#334156' : D.acc;
@@ -1540,49 +1680,11 @@ function renderProjectWBS(c, p, D, editable){
     dayHeader += '<div style="display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;font-size:9px;color:#94A3B8;white-space:nowrap">'+(showLabel?(d.getDate()+((d.getDate()===1||i===0)?' '+MONTH_T[d.getMonth()]:'')):'')+'</div>'; }
   dayHeader += '</div>';
 
-  return '<div style="margin-bottom:12px">'+addBtn+'</div>'+
-    '<div class="card" style="border-radius:16px;overflow:hidden;padding:0">'+
+  return '<div class="card" style="border-radius:16px;overflow:hidden;padding:0">'+
     '<div style="display:flex">'+
     '<div style="width:260px;flex-shrink:0;padding:0 4px 8px 4px;border-right:1px solid #EEF1F8">'+labelCol+'</div>'+
     '<div style="flex:1;overflow-x:auto"><div style="min-width:'+(N*colW)+'px">'+dayHeader+gridRows+'</div></div>'+
     '</div></div>';
-}
-function openProjectTask(projId, task){
-  task = task||{};
-  const tasks = (state.cache.proj&&state.cache.proj.tasks)||[];
-  const parentOpts = '<option value="">— ไม่มี (งานหลัก) —</option>'+tasks.filter(t=>t.id!==task.id).map(t=>'<option value="'+t.id+'"'+(task.parent_id===t.id?' selected':'')+'>'+esc(t.name)+'</option>').join('');
-  document.getElementById('modalHost').innerHTML =
-    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:480px">'+
-    '<div class="modal-head"><span class="t">'+(task.id?'แก้ไขงาน':'เพิ่มงานในแผนโครงการ')+'</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
-    '<div class="modal-body">'+
-      '<div class="field"><label>ชื่องาน</label><input id="pt_name" value="'+esc(task.name||'')+'"></div>'+
-      '<div class="field"><label>อยู่ภายใต้งาน (ถ้ามี — จะกลายเป็น summary bar อัตโนมัติ)</label><select id="pt_parent">'+parentOpts+'</select></div>'+
-      '<div class="row r3"><div class="field"><label>เริ่มวันที่</label><input id="pt_start" type="date" value="'+esc(task.start_date||new Date().toISOString().slice(0,10))+'"></div>'+
-      '<div class="field"><label>ระยะ (วัน)</label><input id="pt_dur" type="number" value="'+(task.duration||1)+'"></div>'+
-      '<div class="field"><label>% ความคืบหน้า</label><input id="pt_pct" type="number" value="'+(task.pct||0)+'"></div></div>'+
-    '</div><div class="modal-foot">'+(task.id?'<button class="btn btn-danger" onclick="deleteProjectTask(\''+task.id+'\',\''+projId+'\')">ลบ</button>':'')+
-      '<div style="flex:1"></div><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
-      '<button class="btn btn-primary" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveProjectTask(\''+projId+'\',\''+(task.id||'')+'\')">บันทึก</button></div></div></div>';
-}
-function openProjectTaskEdit(projId, taskId){
-  const t = (state.cache.proj.tasks||[]).find(x=>x.id===taskId);
-  openProjectTask(projId, t||{});
-}
-async function saveProjectTask(projId, taskId){
-  const g=k=>(document.getElementById(k)||{}).value;
-  const name = g('pt_name').trim();
-  if(!name){ toast('กรอกชื่องาน','err'); return; }
-  const { data:{ user } } = await sb.auth.getUser();
-  const rec = { project_id:projId, parent_id:g('pt_parent')||null, name, start_date:g('pt_start'), duration:+g('pt_dur')||1, pct:+g('pt_pct')||0, created_by:user.id };
-  const { error } = taskId ? await sb.from('project_tasks').update(rec).eq('id',taskId) : await sb.from('project_tasks').insert(rec);
-  if(error){ toast(error.message,'err'); return; }
-  closeModal(); toast('บันทึกเรียบร้อย','ok'); renderProjectDetail(projId);
-}
-async function deleteProjectTask(taskId, projId){
-  if(!confirm('ลบงานนี้? (งานย่อยภายใต้งานนี้จะถูกลบด้วย)')) return;
-  const { error } = await sb.from('project_tasks').delete().eq('id',taskId);
-  if(error){ toast(error.message,'err'); return; }
-  closeModal(); toast('ลบแล้ว','ok'); renderProjectDetail(projId);
 }
 
 function projTab(tab){
