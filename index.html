@@ -1059,9 +1059,46 @@ function sumDivision(projRows, monthRows, divId, month){
 /* ============================================================
  * COMPANY: OVERVIEW
  * ============================================================ */
+/* ---------- roll-up "วันนี้จากหน้างาน": รวมรายงานผล/คำขอเบิก/แผนที่ field ส่งเข้ามาวันนี้ ทุกฝ่ายในจอเดียว ---------- */
+async function fetchFieldPulseToday(){
+  const today = new Date().toISOString().slice(0,10);
+  const [{data:reports},{data:reqs},{data:plans}] = await Promise.all([
+    sb.from('field_reports').select('*').gte('submitted_at', today),
+    sb.from('requisitions').select('*').gte('created_at', today),
+    sb.from('daily_plan').select('*').eq('status','รออนุมัติ').gte('created_at', today),
+  ]);
+  return { reports: reports||[], reqs: reqs||[], plans: plans||[] };
+}
+function renderFieldPulseCard(pulse, projects){
+  const items = [];
+  pulse.reports.forEach(r=>items.push({ts:r.submitted_at, division_id:r.division_id, project_id:r.project_id, ic:'📝', text:'ส่งรายงานผลหน้างาน'+(r.qty_done?' — ทำได้ '+fmt(r.qty_done)+' '+esc(r.unit||''):'')}));
+  pulse.reqs.forEach(r=>items.push({ts:r.created_at, division_id:r.division_id, project_id:r.project_id, ic:(REQ_KIND_ICON[r.kind]||'📋'), text:'ขอเบิก '+esc(r.item)}));
+  pulse.plans.forEach(r=>items.push({ts:r.created_at, division_id:r.division_id, project_id:r.project_id, ic:'📅', text:'ส่งแผนงาน '+esc(r.task)}));
+  items.sort((a,b)=>(b.ts||'').localeCompare(a.ts||''));
+  const stat = (n,label,ic) => '<div style="flex:1;min-width:100px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:17px">'+ic+'</span><div><div style="font-family:var(--disp);font-size:19px;font-weight:700;color:var(--ink)">'+n+'</div><div style="font-size:10.5px;color:var(--muted)">'+esc(label)+'</div></div></div></div>';
+  return '<div class="card" style="margin-bottom:14px">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><div class="card-t">📡 วันนี้จากหน้างาน</div><div class="card-sub">รวมทุกฝ่าย ณ '+todayThaiStr()+'</div></div>'+
+    '<div style="display:flex;gap:16px;flex-wrap:wrap;padding-bottom:14px;margin-bottom:14px;border-bottom:1px solid var(--line)">'+
+      stat(pulse.reports.length,'รายงานผลส่งวันนี้','📝')+
+      stat(pulse.reqs.length,'คำขอเบิกวันนี้','📋')+
+      stat(pulse.plans.length,'แผนรออนุมัติวันนี้','📅')+
+    '</div>'+
+    (!items.length ? '<div class="empty" style="padding:20px 10px">ยังไม่มีความเคลื่อนไหวจากหน้างานวันนี้</div>' :
+    '<div style="display:flex;flex-direction:column;gap:2px">'+items.slice(0,8).map(it=>{
+      const D = divCfg(it.division_id); const proj = projects.find(p=>p.id===it.project_id);
+      const time = (it.ts||'').replace('T',' ').slice(11,16);
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 4px">'+
+        '<span style="width:26px;height:26px;border-radius:9px;background:'+D.soft+';display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">'+it.ic+'</span>'+
+        '<div style="flex:1;min-width:0"><span style="font-size:12.5px;color:var(--ink2)">'+it.text+'</span>'+
+        '<span style="font-size:11px;color:var(--muted2)"> · '+esc(D.name)+(proj?' · '+esc(proj.code):'')+'</span></div>'+
+        '<span style="font-size:11px;color:var(--muted2);font-family:var(--mono);flex-shrink:0">'+esc(time)+'</span></div>';
+    }).join('')+'</div>')+
+  '</div>';
+}
 async function renderCoOverview(){
   const months = lastMonths(12);
   const projects = await loadAllProjects();
+  const pulse = await fetchFieldPulseToday();
   const monthly = await loadMonthlySeries(projects.map(p=>p.id), months);
   const curMonth = currentMonth(), prevMonth = months[months.length-2];
   const divIds = state.divisions.map(d=>d.id);
@@ -1111,6 +1148,7 @@ async function renderCoOverview(){
         '<div style="font-family:var(--disp);font-size:24px;font-weight:700;color:var(--ink)">'+healthScore+'<span style="font-size:13px;color:var(--muted2)">/100</span></div>'+
         '<div style="font-size:11px;font-weight:600;color:'+(healthDelta>=0?'#0D9488':'#DC2626')+'">'+(healthDelta>=0?'▲':'▼')+' เทียบเดือนก่อน '+Math.abs(healthDelta)+'</div></div></div>'+
     '</div>'+
+    renderFieldPulseCard(pulse, projects)+
     '<div class="grid g4" style="margin-bottom:14px">'+kpis.map(k=>
       '<div class="kpi"><div class="top"><div class="ic" style="background:'+k.bg+'">'+k.ic+'</div>'+(k.delta?'<span class="delta" style="color:'+k.deltaColor+'">'+k.delta+'</span>':'')+'</div>'+
       '<div class="lb">'+esc(k.label)+'</div><div class="vl tnum">'+k.value+'</div><div style="margin-top:6px">'+k.spark+'</div></div>').join('')+'</div>'+
@@ -1509,7 +1547,7 @@ function renderProjectWBS(c, p, D, editable){
   if(!state.cache.wbsCollapsed) state.cache.wbsCollapsed = new Set();
   const tasks = c.tasks||[];
   let out = renderWbsGridTable(tasks, p.id, D, editable);
-  if(tasks.length) out += '<div style="margin-top:16px">'+renderWbsGanttChart(tasks, D)+'</div>';
+  if(tasks.length) out += '<div style="margin-top:16px">'+renderWbsGanttChart(tasks, D, editable)+'</div>';
   return out;
 }
 /* ---------- ตารางแก้ไข WBS แบบ Excel: พิมพ์ตรง cell, Tab เลื่อนช่อง (DOM order เดิมของ browser),
@@ -1641,8 +1679,47 @@ async function deleteProjectTask(taskId, projId){
   if(error){ toast(error.message,'err'); return; }
   toast('ลบแล้ว','ok'); refreshWbs();
 }
-/* ---------- ผังแกนต์ (อ่านอย่างเดียว, rollup งานสรุปอัตโนมัติจากงานย่อย) ---------- */
-function renderWbsGanttChart(tasks, D){
+/* ---------- ลากแท่ง Gantt เพื่อเลื่อนวันที่ (เฉพาะงานย่อย ไม่ใช่ summary bar ซึ่งเป็นค่า rollup) ----------
+   ลากด้วย transform:translateX เป็น preview ระหว่างลาก แล้วค่อยคำนวณ day delta ตอนปล่อยเมาส์ค่อยบันทึกจริง */
+// เลื่อนวันแบบ pure UTC (ไม่ผ่าน local Date object) กัน off-by-one เวลา toISOString() แปลง timezone แล้วข้ามวัน
+function shiftDateStr(dateStr, days){
+  const [y,m,d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m-1, d));
+  dt.setUTCDate(dt.getUTCDate()+days);
+  return dt.toISOString().slice(0,10);
+}
+let _wbsDrag = null;
+function wbsBarDragStart(e, barEl, colW){
+  e.preventDefault();
+  _wbsDrag = { barEl, startX:e.clientX, colW, taskId:barEl.dataset.taskId, dayDelta:0 };
+  barEl.style.cursor = 'grabbing'; barEl.style.zIndex = 10;
+  document.addEventListener('mousemove', wbsBarDragMove);
+  document.addEventListener('mouseup', wbsBarDragEnd);
+}
+function wbsBarDragMove(e){
+  if(!_wbsDrag) return;
+  const dayDelta = Math.round((e.clientX - _wbsDrag.startX) / _wbsDrag.colW);
+  _wbsDrag.dayDelta = dayDelta;
+  _wbsDrag.barEl.style.transform = 'translateX('+(dayDelta*_wbsDrag.colW)+'px)';
+  _wbsDrag.barEl.style.boxShadow = '0 4px 14px -2px rgba(16,24,40,.35)';
+}
+async function wbsBarDragEnd(){
+  if(!_wbsDrag) return;
+  document.removeEventListener('mousemove', wbsBarDragMove);
+  document.removeEventListener('mouseup', wbsBarDragEnd);
+  const { taskId, dayDelta, barEl } = _wbsDrag; _wbsDrag = null;
+  barEl.style.cursor='grab'; barEl.style.zIndex=''; barEl.style.boxShadow='';
+  if(!dayDelta) return; // แค่คลิกเฉยๆ ไม่ได้ลาก
+  const task = (state.cache.proj && state.cache.proj.tasks || []).find(t=>t.id===taskId);
+  if(!task){ barEl.style.transform=''; return; }
+  const newStart = shiftDateStr(task.start_date, dayDelta);
+  const { error } = await sb.from('project_tasks').update({start_date:newStart}).eq('id',taskId);
+  if(error){ toast(error.message,'err'); barEl.style.transform=''; return; }
+  toast('เลื่อนวันที่ '+(dayDelta>0?'+':'')+dayDelta+' วันเรียบร้อย','ok');
+  refreshWbs();
+}
+/* ---------- ผังแกนต์ (rollup งานสรุปอัตโนมัติจากงานย่อย, ลากแท่งงานย่อยเพื่อเลื่อนวันได้ถ้าแก้ไขได้) ---------- */
+function renderWbsGanttChart(tasks, D, editable){
   if(!state.cache.wbsCollapsed) state.cache.wbsCollapsed = new Set();
   const tree = buildTaskTree(tasks); tree.forEach(rollupNode);
   const flat = flattenTree(tree, 0, state.cache.wbsCollapsed);
@@ -1654,7 +1731,7 @@ function renderWbsGanttChart(tasks, D){
   const today = new Date(); today.setHours(0,0,0,0);
   const todayIdx = Math.round((today-winStart)/86400000);
 
-  let labelCol = '<div style="height:40px;display:flex;align-items:flex-end;padding-bottom:8px;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--line);margin-bottom:6px">ผังแกนต์</div>';
+  let labelCol = '<div style="height:40px;display:flex;align-items:flex-end;padding-bottom:8px;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--line);margin-bottom:6px">ผังแกนต์'+(editable?' <span style="text-transform:none;font-weight:500;color:var(--muted2)">· ลากแท่งงานเพื่อเลื่อนวันได้</span>':'')+'</div>';
   let gridRows = '';
   flat.forEach(({node,depth})=>{
     const r = node._roll; const isSummary = node.children.length>0;
@@ -1669,10 +1746,12 @@ function renderWbsGanttChart(tasks, D){
       '</div>';
     let cells=''; for(let i=0;i<N;i++){ cells+='<div style="height:100%"></div>'; }
     const barColor = isSummary ? '#334156' : D.acc;
+    const draggable = editable && !isSummary;
     gridRows += '<div style="height:38px;border-bottom:1px solid #F5F7FC"><div style="display:grid;grid-template-columns:repeat('+N+','+colW+'px);height:100%;position:relative">'+cells+
       (todayIdx>=0&&todayIdx<N?'<div style="position:absolute;top:0;bottom:0;left:'+((todayIdx+0.5)*colW)+'px;width:2px;background:var(--red);opacity:.5;z-index:3"></div>':'')+
-      '<div style="grid-column:'+(sIdx+1)+' / span '+span+';align-self:center;height:'+(isSummary?'10px':'20px')+';background:'+(isSummary?barColor:barColor+'1A')+';border-radius:'+(isSummary?'3px':'999px')+';position:relative;margin:0 2px;overflow:hidden">'+
-      (isSummary ? '' : '<div style="height:100%;width:'+r.pct+'%;background:'+barColor+';border-radius:999px"></div>')+
+      '<div'+(draggable?' data-task-id="'+node.id+'" onmousedown="wbsBarDragStart(event,this,'+colW+')" title="ลากเพื่อเลื่อนวันที่"':'')+
+      ' style="grid-column:'+(sIdx+1)+' / span '+span+';align-self:center;height:'+(isSummary?'10px':'20px')+';background:'+(isSummary?barColor:barColor+'1A')+';border-radius:'+(isSummary?'3px':'999px')+';position:relative;margin:0 2px;overflow:hidden'+(draggable?';cursor:grab':'')+'">'+
+      (isSummary ? '' : '<div style="height:100%;width:'+r.pct+'%;background:'+barColor+';border-radius:999px;pointer-events:none"></div>')+
       '</div></div></div>';
   });
   let dayHeader = '<div style="display:grid;grid-template-columns:repeat('+N+','+colW+'px);height:40px;border-bottom:1px solid var(--line);margin-bottom:6px">';
@@ -2537,7 +2616,7 @@ async function saveFieldReport(dailyPlanId, projectId, teamId){
       time_start:g('fr_start'), time_end:g('fr_end'), labor_count:+g('fr_labor')||0, supervise_count:+g('fr_supervise')||0,
       total_people:+g('fr_total')||0, weather:g('fr_weather'), qty_done:+g('fr_qty')||0, unit:g('fr_unit'),
       detail:g('fr_detail'), problem:g('fr_problem'), severity:g('fr_severity')||null, help_needed:g('fr_help'),
-      photos: photoUrls, submitted_by: user.id };
+      photos: photoUrls, submitted_by: user.id, submitted_at: new Date().toISOString() };
     const { error } = await sb.from('field_reports').insert(rec);
     if(error){ toast(error.message,'err'); return; }
     toast('บันทึกรายงานผลเรียบร้อย','ok');
