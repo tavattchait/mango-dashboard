@@ -830,6 +830,23 @@ function closeMobileDrawer(){ document.getElementById('sidebar').classList.remov
 function toggleDesktopMode(){ state.forceDesktop = !state.forceDesktop; applyMobileMode(); go(); }
 function applyMobileMode(){ document.body.classList.toggle('mobile-mode', isMobileMode()); }
 
+/* ---------- mobile full-page forms (แทน modal บนมือถือ) ----------
+   ใช้ field id เดิมทุกจุด → save function เดิมอ่านค่าได้เหมือน desktop ไม่ต้องแยกโค้ด
+   เปิดฟอร์ม: hideMobileNav() ซ่อน bottom nav/FAB ชั่วคราว, ปิดฟอร์ม (× หรือบันทึกสำเร็จ): backToOpsMobile() คืนค่า */
+function mobileFormShell(title, bodyHtml, footHtml){
+  return '<div class="mobile-form">'+
+    '<div class="mf-head"><button class="x" onclick="backToOpsMobile()" aria-label="ปิด">×</button><div class="t">'+esc(title)+'</div></div>'+
+    '<div class="mf-body">'+bodyHtml+'</div>'+
+    '<div class="mf-foot">'+footHtml+'</div>'+
+  '</div>';
+}
+function hideMobileNav(){
+  const nav = document.getElementById('bottomNav'), fab = document.getElementById('fab');
+  if(nav) nav.style.display='none';
+  if(fab) fab.className='fab';
+}
+async function backToOpsMobile(){ await renderOpsPage(); renderMobileNav(); }
+
 function toggleMenu(name){ state.openMenu = state.openMenu===name?null:name; renderShell(); }
 function closeMenu(){ state.openMenu=null; renderShell(); }
 function goWs(id){ state.ws=id; state.sub='overview'; state.selProj=null; state.searchQuery=''; go(); }
@@ -1906,12 +1923,14 @@ async function renderOpsPage(){
   const { data: teams } = await sb.from('teams').select('*').eq('division_id',state.ws).order('name');
   state.cache.teams = teams||[];
   if(!state.opsTab) state.opsTab = 'today';
+  const mob = isMobileMode();
   const tabs = [['today','งานวันนี้'],['submit','ส่งแผนพรุ่งนี้'],['req','เบิกของ'],['items','คลังไอเทม'],['reports','รายงานผล']];
   if(canApproveReq()) tabs.push(['approvals','รออนุมัติ']);
-  let html = '<div class="page wide">'+
+  const tabBar = mob ? '' :
     '<div style="display:flex;background:#fff;border:1px solid var(--line);border-radius:16px;padding:3px;margin-bottom:14px;flex-wrap:wrap;gap:2px">'+
     tabs.map(t=>'<button onclick="switchOpsTab(\''+t[0]+'\')" style="padding:7px 16px;border:none;border-radius:12px;font-family:inherit;font-size:12px;font-weight:'+(state.opsTab===t[0]?600:500)+';cursor:pointer;background:'+(state.opsTab===t[0]?D.acc:'transparent')+';color:'+(state.opsTab===t[0]?'#fff':'#5B6B84')+'">'+t[1]+'</button>').join('')+
-    '</div><div id="opsBody"></div></div>';
+    '</div>';
+  let html = '<div class="page'+(mob?'':' wide')+'">'+tabBar+'<div id="opsBody"></div></div>';
   content(html);
   if(state.opsTab==='today') await renderOpsToday(D);
   else if(state.opsTab==='submit') await renderOpsSubmit(D);
@@ -1934,12 +1953,33 @@ async function renderOpsToday(D){
     return addDays(s, Math.max(1,+r.duration||1)-1) >= todayD;
   });
   const body = document.getElementById('opsBody'); if(!body) return;
-  const quickActions = '<div class="grid g3" style="margin-bottom:14px">'+
-    [['openFieldReport(null,null,null)','📝','รายงานผลวันนี้'],['openRequisition()','📋','ขอเบิกของ'],['switchOpsTab(\'submit\')','📅','ส่งแผนพรุ่งนี้']].map(a=>
-    '<button onclick="'+a[0]+'" style="background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px 12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:0 1px 2px rgba(16,24,40,.03)">'+
-    '<span style="font-size:30px">'+a[1]+'</span><span style="font-size:13px;font-weight:600;color:var(--ink)">'+a[2]+'</span></button>').join('')+'</div>';
+  const mob = isMobileMode();
+  const qa = mob
+    ? [['switchOpsTab(\'submit\')','📅','ส่งแผนพรุ่งนี้','var(--blue)'],['openRequisition()','📋','ขอเบิกของ','var(--teal)']]
+    : [['openFieldReport(null,null,null)','📝','รายงานผลวันนี้'],['openRequisition()','📋','ขอเบิกของ'],['switchOpsTab(\'submit\')','📅','ส่งแผนพรุ่งนี้']];
+  const quickActions = '<div class="grid '+(mob?'g2':'g3')+'" style="margin-bottom:14px">'+
+    qa.map(a=>'<button onclick="'+a[0]+'" style="background:#fff;border:1px solid var(--line);border-radius:'+(mob?'18px':'16px')+';padding:'+(mob?'22px 12px':'20px 12px')+';cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:0 1px 2px rgba(16,24,40,.03)">'+
+    '<span style="font-size:'+(mob?'34px':'30px')+'">'+a[1]+'</span><span style="font-size:'+(mob?'13.5px':'13px')+';font-weight:600;color:'+(a[3]||'var(--ink)')+'">'+a[2]+'</span></button>').join('')+'</div>';
   if(!rows.length){ body.innerHTML = quickActions+'<div class="card"><div class="empty">ยังไม่มีงานที่กำลังทำอยู่วันนี้</div></div>'; return; }
   const byTeam = {}; rows.forEach(r=>{ (byTeam[r.team_id||'-']=byTeam[r.team_id||'-']||[]).push(r); });
+  if(mob){
+    body.innerHTML = quickActions + Object.keys(byTeam).map(tid=>{
+      const team = state.cache.teams.find(t=>t.id===tid);
+      return '<div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em;margin:14px 2px 8px;text-transform:uppercase">'+esc(team?team.name:'ไม่ระบุทีม')+'</div>'+
+        byTeam[tid].map(r=>{ const proj=state.projects.find(p=>p.id===r.project_id); const pct=Math.max(0,Math.min(100,+r.pct||0));
+          const col = pct>=100?'var(--teal)':pct>0?'var(--amber)':'var(--blue)';
+          return '<div class="mc" style="border-left:4px solid '+col+'">'+
+            '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">'+
+              '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;color:var(--ink)">'+esc(r.task)+'</div>'+
+              '<div style="font-size:11.5px;color:var(--muted2);margin-top:2px">'+esc(proj?proj.code:'-')+(r.location_detail?' · '+esc(r.location_detail):'')+'</div></div>'+
+              '<span style="font-size:12px;font-weight:700;color:'+col+';white-space:nowrap">'+pct+'%</span></div>'+
+            '<div style="font-size:11.5px;color:var(--ink2);margin-bottom:10px">🕑 '+esc(r.shift||'กลางวัน')+' · 👥 '+((+r.headcount_male||0)+(+r.headcount_female||0))+' คน</div>'+
+            '<button class="btn btn-primary touch-lg btn-block" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="openFieldReport(\''+r.id+'\',\''+(r.project_id||'')+'\',\''+(r.team_id||'')+'\')">📝 รายงานผล</button>'+
+          '</div>';
+        }).join('');
+    }).join('');
+    return;
+  }
   body.innerHTML = quickActions+'<div class="card" style="padding:0;overflow:hidden">'+Object.keys(byTeam).map(tid=>{
     const team = state.cache.teams.find(t=>t.id===tid);
     return '<div style="padding:12px 18px;background:'+D.soft+';display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--line)">'+
@@ -1959,11 +1999,12 @@ async function renderOpsToday(D){
 /* ---------- ส่งแผนพรุ่งนี้ (รออนุมัติ) ---------- */
 async function renderOpsSubmit(D){
   const body = document.getElementById('opsBody'); if(!body) return;
+  const mob = isMobileMode();
   const { data: items } = await sb.from('item_catalog').select('*').eq('division_id',state.ws).eq('kind','รถ').eq('active',true).order('name');
   const teamOpts = (state.cache.teams||[]).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
   const projOpts = state.projects.filter(p=>p.division_id===state.ws).map(p=>'<option value="'+p.id+'">'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
   const vehOpts = '<option value="">— ไม่ใช้รถ —</option>'+(items||[]).map(i=>'<option value="'+i.id+'">'+esc(i.name)+'</option>').join('');
-  body.innerHTML = '<div class="card" style="max-width:640px"><div class="card-t" style="margin-bottom:14px">ส่งแผนงานวันพรุ่งนี้ (รอ PM อนุมัติ)</div>'+
+  body.innerHTML = '<div class="card" style="'+(mob?'':'max-width:640px')+'"><div class="card-t" style="margin-bottom:14px">ส่งแผนงานวันพรุ่งนี้ (รอ PM อนุมัติ)</div>'+
     '<div class="row r2"><div class="field"><label>ทีม</label><select id="sp_team">'+(teamOpts||'<option value="">— ยังไม่มีทีม —</option>')+'</select></div>'+
     '<div class="field"><label>กะ</label><select id="sp_shift"><option>กลางวัน</option><option>กลางคืน</option></select></div></div>'+
     '<div class="field"><label>โครงการ</label><select id="sp_proj">'+projOpts+'</select></div>'+
@@ -1974,7 +2015,7 @@ async function renderOpsSubmit(D){
     '<div class="field"><label>คนงานชาย</label><input id="sp_male" type="number" value="0"></div>'+
     '<div class="field"><label>คนงานหญิง</label><input id="sp_female" type="number" value="0"></div></div>'+
     '<div class="field"><label>รถที่ใช้</label><select id="sp_veh">'+vehOpts+'</select></div>'+
-    '<button class="btn btn-primary" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="saveSubmitPlan()">ส่งแผนรออนุมัติ</button>'+
+    '<button class="btn btn-primary '+(mob?'touch-lg btn-block':'')+'" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="saveSubmitPlan()">ส่งแผนรออนุมัติ</button>'+
     '</div>';
 }
 async function saveSubmitPlan(){
@@ -1998,45 +2039,71 @@ async function renderOpsReq(D){
   const body = document.getElementById('opsBody'); if(!body) return;
   if(error){ body.innerHTML='<div class="card"><div class="empty">'+esc(error.message)+'<br><br>ถ้าเห็น "does not exist" แปลว่ายังไม่ได้รัน schema_fieldwork.sql/schema_operations.sql</div></div>'; return; }
   state.cache.reqRows = rows||[];
+  const mob = isMobileMode();
   const pending = (rows||[]).filter(r=>r.status==='รออนุมัติ').length;
-  body.innerHTML = '<div class="grid g3" style="margin-bottom:14px">'+
+  const kpiRow = '<div class="grid g3" style="margin-bottom:14px">'+
       kpi('รออนุมัติ', pending, 'รายการ')+
       kpi('อนุมัติแล้ว (ถืออยู่)', (rows||[]).filter(r=>r.status==='อนุมัติ').length, 'รายการ')+
       kpi('ทั้งหมด', (rows||[]).length, 'รายการ')+
-    '</div>'+
-    (canSubmitField(state.ws) ? '<div style="margin-bottom:14px"><button class="btn btn-primary btn-sm" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="openRequisition()">+ ขอเบิกของ/รถ/เครื่องมือ</button></div>' : '')+
+    '</div>';
+  const newBtn = (!mob && canSubmitField(state.ws)) ? '<div style="margin-bottom:14px"><button class="btn btn-primary btn-sm" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="openRequisition()">+ ขอเบิกของ/รถ/เครื่องมือ</button></div>' : '';
+  if(!rows||!rows.length){ body.innerHTML = kpiRow+newBtn+'<div class="card"><div class="empty">ยังไม่มีรายการเบิก</div></div>'; return; }
+  const rowActions = r=>{
+    const canReturn = r.status==='อนุมัติ' && ['รถ','เครื่องมือ'].includes(r.kind) && canApproveReq();
+    return (r.status==='รออนุมัติ'&&canApproveReq() ?
+      '<button class="btn btn-primary '+(mob?'touch-lg':'btn-sm')+'" style="--acc:var(--teal);--acc2:#14b8a6" onclick="setReqStatus(\''+r.id+'\',\'อนุมัติ\')">อนุมัติ</button> '+
+      '<button class="btn btn-ghost '+(mob?'touch-lg':'btn-sm')+'" onclick="setReqStatus(\''+r.id+'\',\'ปฏิเสธ\')">ปฏิเสธ</button>' : '')+
+    (canReturn ? '<button class="btn btn-ghost '+(mob?'touch-lg':'btn-sm')+'" onclick="openReturnItem(\''+r.id+'\')">↩️ คืนของ</button>' : '');
+  };
+  if(mob){
+    body.innerHTML = kpiRow + rows.map(r=>{ const proj=state.projects.find(p=>p.id===r.project_id);
+      return '<div class="mc">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px">'+
+          '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;color:var(--ink)">'+(REQ_KIND_ICON[r.kind]||'')+' '+esc(r.item)+'</div>'+
+          '<div style="font-size:11.5px;color:var(--muted2);margin-top:2px">'+esc(proj?proj.code:'-')+' · '+thDate(r.when_date)+'</div></div>'+
+          reqStatusPill(r.status)+'</div>'+
+        (r.reason?'<div style="font-size:12px;color:var(--ink2);margin:6px 0 10px">เหตุผล: '+esc(r.reason)+'</div>':'<div style="height:6px"></div>')+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">'+rowActions(r)+'</div>'+
+      '</div>';
+    }).join('');
+    return;
+  }
+  body.innerHTML = kpiRow + newBtn +
     '<div class="card" style="padding:0;border-color:var(--line2);overflow:hidden">'+
-    (!rows||!rows.length ? '<div class="empty">ยังไม่มีรายการเบิก</div>' :
     '<div class="table-wrap" style="border:none;border-radius:0"><table><thead><tr><th>วันที่</th><th>โครงการ</th><th>ประเภท</th><th>รายการ</th><th>เหตุผล</th><th>สถานะ</th><th></th></tr></thead><tbody>'+
     rows.map(r=>{ const proj=state.projects.find(p=>p.id===r.project_id);
-      const canReturn = r.status==='อนุมัติ' && ['รถ','เครื่องมือ'].includes(r.kind) && canApproveReq();
       return '<tr><td>'+thDate(r.when_date)+'</td><td>'+esc(proj?proj.code:'-')+'</td>'+
       '<td>'+(REQ_KIND_ICON[r.kind]||'')+' '+esc(r.kind)+'</td><td>'+esc(r.item)+'</td><td>'+esc(r.reason||'-')+'</td>'+
       '<td>'+reqStatusPill(r.status)+'</td>'+
-      '<td>'+(r.status==='รออนุมัติ'&&canApproveReq() ?
-        '<button class="btn btn-primary btn-sm" style="--acc:var(--teal);--acc2:#14b8a6" onclick="setReqStatus(\''+r.id+'\',\'อนุมัติ\')">อนุมัติ</button> '+
-        '<button class="btn btn-ghost btn-sm" onclick="setReqStatus(\''+r.id+'\',\'ปฏิเสธ\')">ปฏิเสธ</button>' : '')+
-      (canReturn ? '<button class="btn btn-ghost btn-sm" onclick="openReturnItem(\''+r.id+'\')">↩️ คืนของ</button>' : '')+'</td></tr>';
-    }).join('')+'</tbody></table></div>')+
-    '</div>';
+      '<td>'+rowActions(r)+'</td></tr>';
+    }).join('')+'</tbody></table></div></div>';
+}
+function requisitionFieldsHtml(){
+  const projOpts = state.projects.filter(p=>p.division_id===state.ws).map(p=>'<option value="'+p.id+'">'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
+  const teamOpts = (state.cache.teams||[]).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
+  return '<div class="field"><label>โครงการ</label><select id="rq_proj">'+projOpts+'</select></div>'+
+    '<div class="row r2"><div class="field"><label>ประเภท</label><select id="rq_kind" onchange="refreshReqItemOptions()"><option>วัสดุ</option><option>เครื่องมือ</option><option>รถ</option></select></div>'+
+    '<div class="field"><label>ทีม</label><select id="rq_team">'+(teamOpts||'<option value="">— ไม่ระบุ —</option>')+'</select></div></div>'+
+    '<div class="field"><label>รายการที่ขอเบิก</label><select id="rq_item"></select></div>'+
+    '<div class="field"><label>เหตุผล</label><input id="rq_reason" placeholder="เช่น ยกท่อลงบ่อ MH.03"></div>'+
+    '<div class="row r2"><div class="field"><label>วันที่ต้องการใช้</label><input id="rq_when" type="date"></div><div class="field"><label>รายละเอียดเพิ่มเติม</label><input id="rq_detail"></div></div>';
 }
 async function openRequisition(){
   const { data: items } = await sb.from('item_catalog').select('*').eq('division_id',state.ws).eq('active',true).order('name');
   state.cache.reqItems = items||[];
-  const projOpts = state.projects.filter(p=>p.division_id===state.ws).map(p=>'<option value="'+p.id+'">'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
-  const teamOpts = (state.cache.teams||[]).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
-  document.getElementById('modalHost').innerHTML =
-    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
-    '<div class="modal-head"><span class="t">📋 ขอเบิกของ/รถ/เครื่องมือ</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
-    '<div class="modal-body">'+
-      '<div class="field"><label>โครงการ</label><select id="rq_proj">'+projOpts+'</select></div>'+
-      '<div class="row r2"><div class="field"><label>ประเภท</label><select id="rq_kind" onchange="refreshReqItemOptions()"><option>วัสดุ</option><option>เครื่องมือ</option><option>รถ</option></select></div>'+
-      '<div class="field"><label>ทีม</label><select id="rq_team">'+(teamOpts||'<option value="">— ไม่ระบุ —</option>')+'</select></div></div>'+
-      '<div class="field"><label>รายการที่ขอเบิก</label><select id="rq_item"></select></div>'+
-      '<div class="field"><label>เหตุผล</label><input id="rq_reason" placeholder="เช่น ยกท่อลงบ่อ MH.03"></div>'+
-      '<div class="row r2"><div class="field"><label>วันที่ต้องการใช้</label><input id="rq_when" type="date"></div><div class="field"><label>รายละเอียดเพิ่มเติม</label><input id="rq_detail"></div></div>'+
-    '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
-      '<button class="btn btn-primary" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveRequisition()">ส่งคำขอ</button></div></div></div>';
+  const body = requisitionFieldsHtml();
+  if(isMobileMode()){
+    hideMobileNav();
+    content(mobileFormShell('📋 ขอเบิกของ/รถ/เครื่องมือ', body,
+      '<button class="btn btn-primary touch-lg" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveRequisition()">ส่งคำขอ</button>'));
+  } else {
+    document.getElementById('modalHost').innerHTML =
+      '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
+      '<div class="modal-head"><span class="t">📋 ขอเบิกของ/รถ/เครื่องมือ</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+      '<div class="modal-body">'+body+
+      '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+        '<button class="btn btn-primary" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveRequisition()">ส่งคำขอ</button></div></div></div>';
+  }
   document.getElementById('rq_when').value = new Date().toISOString().slice(0,10);
   refreshReqItemOptions();
 }
@@ -2057,7 +2124,7 @@ async function saveRequisition(){
     item_id:itemId, item: item?item.name:'', reason:g('rq_reason'), detail:g('rq_detail'), when_date:g('rq_when'), created_by:user.id };
   const { error } = await sb.from('requisitions').insert(rec);
   if(error){ toast(error.message,'err'); return; }
-  closeModal(); toast('ส่งคำขอเบิกเรียบร้อย รออนุมัติ','ok'); renderOpsPage();
+  closeModal(); toast('ส่งคำขอเบิกเรียบร้อย รออนุมัติ','ok'); renderOpsPage(); renderMobileNav();
 }
 async function setReqStatus(id, status){
   const rec = { status };
@@ -2067,35 +2134,62 @@ async function setReqStatus(id, status){
   toast(status+'เรียบร้อย','ok'); renderOpsPage();
 }
 function openReturnItem(reqId){
-  document.getElementById('modalHost').innerHTML =
-    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:400px">'+
-    '<div class="modal-head"><span class="t">↩️ บันทึกการคืนของ</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
-    '<div class="modal-body"><div class="field"><label>หมายเหตุการคืน (ถ้ามี)</label><textarea id="rt_note" rows="2" placeholder="เช่น สภาพปกติ / มีรอยขีดข่วนเล็กน้อย"></textarea></div></div>'+
-    '<div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
-      '<button class="btn btn-primary" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveReturnItem(\''+reqId+'\')">ยืนยันคืนของ</button></div></div></div>';
+  const body = '<div class="field"><label>หมายเหตุการคืน (ถ้ามี)</label><textarea id="rt_note" rows="3" placeholder="เช่น สภาพปกติ / มีรอยขีดข่วนเล็กน้อย"></textarea></div>';
+  if(isMobileMode()){
+    hideMobileNav();
+    content(mobileFormShell('↩️ บันทึกการคืนของ', body,
+      '<button class="btn btn-primary touch-lg" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveReturnItem(\''+reqId+'\')">ยืนยันคืนของ</button>'));
+  } else {
+    document.getElementById('modalHost').innerHTML =
+      '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:400px">'+
+      '<div class="modal-head"><span class="t">↩️ บันทึกการคืนของ</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+      '<div class="modal-body">'+body+'</div>'+
+      '<div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+        '<button class="btn btn-primary" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveReturnItem(\''+reqId+'\')">ยืนยันคืนของ</button></div></div></div>';
+  }
 }
 async function saveReturnItem(reqId){
   const { data:{ user } } = await sb.auth.getUser();
   const note = (document.getElementById('rt_note')||{}).value;
   const { error } = await sb.from('requisitions').update({ status:'คืนแล้ว', returned_at:new Date().toISOString(), returned_by:user.id, return_note:note }).eq('id', reqId);
   if(error){ toast(error.message,'err'); return; }
-  closeModal(); toast('บันทึกการคืนเรียบร้อย','ok'); renderOpsPage();
+  closeModal(); toast('บันทึกการคืนเรียบร้อย','ok'); renderOpsPage(); renderMobileNav();
 }
 
 /* ---------- คลังไอเทม (รถ/เครื่องมือ/วัสดุจริงของฝ่าย) ---------- */
 const ITEM_KIND_ICON = REQ_KIND_ICON;
+let _itemCatalogCache = [];
 async function renderOpsItems(D){
   const { data: rows, error } = await sb.from('item_catalog').select('*').eq('division_id',state.ws).order('kind').order('name');
   const body = document.getElementById('opsBody'); if(!body) return;
   if(error){ body.innerHTML='<div class="card"><div class="empty">'+esc(error.message)+'<br><br>ถ้าเห็น "relation item_catalog does not exist" แปลว่ายังไม่ได้รัน schema_operations.sql</div></div>'; return; }
   const canManage = canWrite(state.ws);
-  body.innerHTML = (canManage?'<div style="margin-bottom:14px"><button class="btn btn-primary btn-sm" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="openItem()">+ เพิ่มไอเทม</button></div>':'')+
-    (!rows||!rows.length ? '<div class="card"><div class="empty">ยังไม่มีไอเทมในคลัง'+(canManage?' — กด "+ เพิ่มไอเทม" เพื่อเริ่มต้น':'')+'</div></div>' :
+  _itemCatalogCache = rows||[];
+  const mob = isMobileMode();
+  const newBtn = (canManage?'<div style="margin-bottom:14px"><button class="btn btn-primary '+(mob?'touch-lg':'btn-sm')+'" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="openItem()">+ เพิ่มไอเทม</button></div>':'')+
+    (!rows||!rows.length ? '<div class="card"><div class="empty">ยังไม่มีไอเทมในคลัง'+(canManage?' — กด "+ เพิ่มไอเทม" เพื่อเริ่มต้น':'')+'</div></div>' : '');
+  if(!rows||!rows.length){ body.innerHTML = newBtn; return; }
+  if(mob){
+    body.innerHTML = newBtn + '<div class="grid g2">'+
+      rows.map(it=>'<div class="mc"'+(canManage?' onclick="openItemById(\''+esc(it.id)+'\')" style="cursor:pointer"':'')+'>'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:6px">'+
+          '<span style="font-size:22px;line-height:1">'+(ITEM_KIND_ICON[it.kind]||'')+'</span>'+
+          (it.active?'<span class="pill" style="background:var(--teal-soft);color:var(--teal)">ใช้งาน</span>':'<span class="pill" style="background:var(--soft);color:var(--muted)">ปิด</span>')+'</div>'+
+        '<div style="font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.3">'+esc(it.name)+'</div>'+
+        '<div style="font-size:11px;color:var(--muted);margin-top:3px">'+esc(it.kind)+(it.unit?' · '+esc(it.unit):'')+(it.code?' · '+esc(it.code):'')+'</div>'+
+      '</div>').join('')+'</div>';
+    return;
+  }
+  body.innerHTML = newBtn+
     '<div class="card" style="padding:0;overflow:hidden"><div class="table-wrap" style="border:none"><table><thead><tr><th>ประเภท</th><th>ชื่อ</th><th>หน่วย</th><th>รหัส</th><th>สถานะ</th><th></th></tr></thead><tbody>'+
     rows.map(it=>'<tr><td>'+(ITEM_KIND_ICON[it.kind]||'')+' '+esc(it.kind)+'</td><td>'+esc(it.name)+'</td><td>'+esc(it.unit||'-')+'</td><td>'+esc(it.code||'-')+'</td>'+
       '<td>'+(it.active?'<span class="pill" style="background:var(--teal-soft);color:var(--teal)">ใช้งาน</span>':'<span class="pill" style="background:var(--soft);color:var(--muted)">ปิด</span>')+'</td>'+
-      '<td>'+(canManage?'<button class="btn btn-ghost btn-sm" onclick=\'openItem('+JSON.stringify(it)+')\'>แก้ไข</button>':'')+'</td></tr>').join('')+
-    '</tbody></table></div></div>');
+      '<td>'+(canManage?'<button class="btn btn-ghost btn-sm" onclick="openItemById(\''+esc(it.id)+'\')">แก้ไข</button>':'')+'</td></tr>').join('')+
+    '</tbody></table></div></div>';
+}
+function openItemById(id){
+  const it = _itemCatalogCache.find(x=>x.id===id) || {};
+  openItem(it);
 }
 function openItem(it){
   it = it||{};
@@ -2133,9 +2227,27 @@ async function renderOpsReports(D){
   const { data: rows, error } = await sb.from('field_reports').select('*').in('project_id', projIds.length?projIds:['00000000-0000-0000-0000-000000000000']).order('submitted_at',{ascending:false});
   const body = document.getElementById('opsBody'); if(!body) return;
   if(error){ body.innerHTML='<div class="card"><div class="empty">'+esc(error.message)+'</div></div>'; return; }
-  body.innerHTML = '<div style="margin-bottom:14px"><button class="btn btn-primary btn-sm" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="openFieldReport(null,null,null)">+ ส่งรายงานใหม่</button></div>'+
-    (!rows||!rows.length ? '<div class="card"><div class="empty">ยังไม่มีรายงานผลหน้างาน</div></div>' :
-    '<div class="grid g2">'+rows.map(r=>{ const proj=state.projects.find(p=>p.id===r.project_id); const team=state.cache.teams.find(t=>t.id===r.team_id);
+  const mob = isMobileMode();
+  const newBtn = '<div style="margin-bottom:14px"><button class="btn btn-primary '+(mob?'touch-lg btn-block':'btn-sm')+'" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="openFieldReport(null,null,null)">+ ส่งรายงานใหม่</button></div>';
+  if(!rows||!rows.length){ body.innerHTML = newBtn+'<div class="card"><div class="empty">ยังไม่มีรายงานผลหน้างาน</div></div>'; return; }
+  if(mob){
+    // photo-first: รูปนำหน้าเต็มความกว้าง แล้วรายละเอียดตามหลัง อ่านง่ายบนจอเล็ก
+    body.innerHTML = newBtn + rows.map(r=>{ const proj=state.projects.find(p=>p.id===r.project_id); const team=state.cache.teams.find(t=>t.id===r.team_id);
+      const photos = r.photos||[];
+      return '<div class="mc" style="padding:0;overflow:hidden">'+
+      (photos.length ? '<div style="display:flex;gap:2px;overflow-x:auto">'+photos.map(u=>'<a href="'+esc(u)+'" target="_blank" rel="noopener" style="flex-shrink:0"><img src="'+esc(u)+'" style="width:140px;height:140px;object-fit:cover"></a>').join('')+'</div>'
+        : '<div style="height:64px;background:var(--soft);display:flex;align-items:center;justify-content:center;color:var(--muted2);font-size:12px">ไม่มีรูปแนบ</div>')+
+      '<div style="padding:12px 14px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px"><div><span class="badge">'+esc(proj?proj.code:'-')+'</span> <b style="font-size:13px">'+esc(team?team.name:'-')+'</b></div><span style="font-size:11px;color:var(--muted)">'+thDate(r.report_date)+'</span></div>'+
+      '<div style="font-size:12.5px;color:var(--ink2);margin-bottom:4px">⏰ '+esc(r.time_start||'-')+'–'+esc(r.time_end||'-')+' · 👷 '+(r.total_people||0)+' คน · '+esc(r.weather||'-')+'</div>'+
+      '<div style="font-size:12.5px;color:var(--ink2);margin-bottom:4px">ทำได้: <b>'+fmt(r.qty_done)+' '+esc(r.unit||'')+'</b>'+(r.detail?' — '+esc(r.detail):'')+'</div>'+
+      (r.problem?'<div style="font-size:12px;color:var(--red);margin-bottom:6px">⚠️ '+esc(r.problem)+(r.severity?' ('+esc(r.severity)+')':'')+'</div>':'')+
+      (canWrite(state.ws) && r.project_id ? '<button class="btn btn-ghost touch-lg btn-block" onclick="openApplyProgress(\''+r.id+'\',\''+r.project_id+'\')">📊 ใช้ผลนี้อัปเดตงานใน WBS</button>' : '')+
+      '</div></div>';
+    }).join('');
+    return;
+  }
+  body.innerHTML = newBtn+'<div class="grid g2">'+rows.map(r=>{ const proj=state.projects.find(p=>p.id===r.project_id); const team=state.cache.teams.find(t=>t.id===r.team_id);
       return '<div class="card">'+
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px"><div><span class="badge">'+esc(proj?proj.code:'-')+'</span> <b style="font-size:12.5px">'+esc(team?team.name:'-')+'</b></div><span style="font-size:11px;color:var(--muted)">'+thDate(r.report_date)+'</span></div>'+
       '<div style="font-size:12px;color:var(--ink2);margin-bottom:6px">⏰ '+esc(r.time_start||'-')+'–'+esc(r.time_end||'-')+' · 👷 '+(r.total_people||0)+' คน · '+esc(r.weather||'-')+'</div>'+
@@ -2144,7 +2256,7 @@ async function renderOpsReports(D){
       ((r.photos||[]).length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+r.photos.map(u=>'<a href="'+esc(u)+'" target="_blank" rel="noopener"><img src="'+esc(u)+'" style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--line)"></a>').join('')+'</div>' : '')+
       (canWrite(state.ws) && r.project_id ? '<button class="btn btn-ghost btn-sm" onclick="openApplyProgress(\''+r.id+'\',\''+r.project_id+'\')">📊 ใช้ผลนี้อัปเดตงานใน WBS</button>' : '')+
       '</div>';
-    }).join('')+'</div>');
+    }).join('')+'</div>';
 }
 async function openApplyProgress(reportId, projectId){
   const { data: tasks } = await sb.from('project_tasks').select('*').eq('project_id', projectId).order('sort_order');
@@ -2179,25 +2291,34 @@ async function renderOpsApprovals(D){
     sb.from('requisitions').select('*').in('project_id', projIds.length?projIds:['00000000-0000-0000-0000-000000000000']).eq('status','รออนุมัติ').order('created_at'),
   ]);
   const body = document.getElementById('opsBody'); if(!body) return;
-  body.innerHTML = '<div class="grid g2">'+
-    '<div class="card"><div class="card-t" style="margin-bottom:10px">แผนงานรออนุมัติ ('+(plans||[]).length+')</div>'+
-    (!plans||!plans.length ? '<div class="empty">ไม่มีแผนรออนุมัติ</div>' : plans.map(pl=>{
+  const mob = isMobileMode();
+  const btnCls = mob ? 'touch-lg' : 'btn-sm';
+  const planCards = !plans||!plans.length ? '<div class="empty">ไม่มีแผนรออนุมัติ</div>' : plans.map(pl=>{
       const proj=state.projects.find(p=>p.id===pl.project_id); const team=state.cache.teams.find(t=>t.id===pl.team_id);
-      return '<div style="padding:10px 0;border-bottom:1px solid #EEF1F8">'+
-        '<div style="font-size:12.5px;font-weight:600">'+esc(pl.task)+'</div>'+
-        '<div style="font-size:11px;color:var(--muted2);margin-bottom:6px">'+esc(team?team.name:'-')+' · '+esc(proj?proj.code:'-')+' · '+thDate(pl.plan_date)+' · '+esc(pl.shift||'')+'</div>'+
-        '<button class="btn btn-primary btn-sm" style="--acc:var(--teal);--acc2:#14b8a6" onclick="setPlanApproval(\''+pl.id+'\',\'อนุมัติ\')">อนุมัติ</button> '+
-        '<button class="btn btn-ghost btn-sm" onclick="setPlanApproval(\''+pl.id+'\',\'ปฏิเสธ\')">ปฏิเสธ</button></div>';
-    }).join(''))+'</div>'+
-    '<div class="card"><div class="card-t" style="margin-bottom:10px">คำขอเบิกรออนุมัติ ('+(reqs||[]).length+')</div>'+
-    (!reqs||!reqs.length ? '<div class="empty">ไม่มีคำขอเบิกรออนุมัติ</div>' : reqs.map(r=>{
+      return (mob?'<div class="mc">':'<div style="padding:10px 0;border-bottom:1px solid #EEF1F8">')+
+        '<div style="font-size:'+(mob?'14px':'12.5px')+';font-weight:600">'+esc(pl.task)+'</div>'+
+        '<div style="font-size:11.5px;color:var(--muted2);margin:2px 0 8px">'+esc(team?team.name:'-')+' · '+esc(proj?proj.code:'-')+' · '+thDate(pl.plan_date)+' · '+esc(pl.shift||'')+'</div>'+
+        '<div style="display:flex;gap:8px'+(mob?';flex-direction:column':'')+'">'+
+        '<button class="btn btn-primary '+btnCls+(mob?' btn-block':'')+'" style="--acc:var(--teal);--acc2:#14b8a6" onclick="setPlanApproval(\''+pl.id+'\',\'อนุมัติ\')">อนุมัติ</button>'+
+        '<button class="btn btn-ghost '+btnCls+(mob?' btn-block':'')+'" onclick="setPlanApproval(\''+pl.id+'\',\'ปฏิเสธ\')">ปฏิเสธ</button></div></div>';
+    }).join('');
+  const reqCards = !reqs||!reqs.length ? '<div class="empty">ไม่มีคำขอเบิกรออนุมัติ</div>' : reqs.map(r=>{
       const proj=state.projects.find(p=>p.id===r.project_id);
-      return '<div style="padding:10px 0;border-bottom:1px solid #EEF1F8">'+
-        '<div style="font-size:12.5px;font-weight:600">'+(REQ_KIND_ICON[r.kind]||'')+' '+esc(r.item)+'</div>'+
-        '<div style="font-size:11px;color:var(--muted2);margin-bottom:6px">'+esc(proj?proj.code:'-')+' · '+esc(r.reason||'-')+'</div>'+
-        '<button class="btn btn-primary btn-sm" style="--acc:var(--teal);--acc2:#14b8a6" onclick="setReqStatus(\''+r.id+'\',\'อนุมัติ\')">อนุมัติ</button> '+
-        '<button class="btn btn-ghost btn-sm" onclick="setReqStatus(\''+r.id+'\',\'ปฏิเสธ\')">ปฏิเสธ</button></div>';
-    }).join(''))+'</div>'+
+      return (mob?'<div class="mc">':'<div style="padding:10px 0;border-bottom:1px solid #EEF1F8">')+
+        '<div style="font-size:'+(mob?'14px':'12.5px')+';font-weight:600">'+(REQ_KIND_ICON[r.kind]||'')+' '+esc(r.item)+'</div>'+
+        '<div style="font-size:11.5px;color:var(--muted2);margin:2px 0 8px">'+esc(proj?proj.code:'-')+' · '+esc(r.reason||'-')+'</div>'+
+        '<div style="display:flex;gap:8px'+(mob?';flex-direction:column':'')+'">'+
+        '<button class="btn btn-primary '+btnCls+(mob?' btn-block':'')+'" style="--acc:var(--teal);--acc2:#14b8a6" onclick="setReqStatus(\''+r.id+'\',\'อนุมัติ\')">อนุมัติ</button>'+
+        '<button class="btn btn-ghost '+btnCls+(mob?' btn-block':'')+'" onclick="setReqStatus(\''+r.id+'\',\'ปฏิเสธ\')">ปฏิเสธ</button></div></div>';
+    }).join('');
+  if(mob){
+    body.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em;margin:2px 2px 8px;text-transform:uppercase">แผนงานรออนุมัติ ('+(plans||[]).length+')</div>'+planCards+
+      '<div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em;margin:18px 2px 8px;text-transform:uppercase">คำขอเบิกรออนุมัติ ('+(reqs||[]).length+')</div>'+reqCards;
+    return;
+  }
+  body.innerHTML = '<div class="grid g2">'+
+    '<div class="card"><div class="card-t" style="margin-bottom:10px">แผนงานรออนุมัติ ('+(plans||[]).length+')</div>'+planCards+'</div>'+
+    '<div class="card"><div class="card-t" style="margin-bottom:10px">คำขอเบิกรออนุมัติ ('+(reqs||[]).length+')</div>'+reqCards+'</div>'+
     '</div>';
 }
 async function setPlanApproval(id, status){
@@ -2208,51 +2329,107 @@ async function setPlanApproval(id, status){
   toast(status+'เรียบร้อย','ok'); renderOpsApprovals(divCfg(state.ws));
 }
 
+/* ---------- photo picker (ใช้ร่วม desktop+mobile: ถ่ายรูป/เลือกจากคลัง + preview + ลบได้) ----------
+   ไฟล์เก็บใน _photoFiles ระหว่างฟอร์มเปิดอยู่ — resize ด้วย canvas ก่อนอัปโหลดจริงตอนกด "บันทึก" (ไม่ resize ตอน preview เพื่อความเร็ว) */
+let _photoFiles = [];
+function photoPickerHtml(){
+  return '<div class="field"><label>รูปถ่ายหน้างาน</label>'+
+    '<div style="display:flex;gap:8px;margin-bottom:10px">'+
+      '<label class="btn btn-ghost touch-lg" style="flex:1;justify-content:center;margin:0">📷 ถ่ายรูป<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="addPhotoFiles(this.files);this.value=\'\'"></label>'+
+      '<label class="btn btn-ghost touch-lg" style="flex:1;justify-content:center;margin:0">🖼️ เลือกจากคลัง<input type="file" accept="image/*" multiple style="display:none" onchange="addPhotoFiles(this.files);this.value=\'\'"></label>'+
+    '</div>'+
+    '<div id="photoPreview" style="display:flex;gap:8px;flex-wrap:wrap"></div></div>';
+}
+function addPhotoFiles(fileList){ _photoFiles.push(...Array.from(fileList)); renderPhotoPreview(); }
+function removePhotoFile(i){ _photoFiles.splice(i,1); renderPhotoPreview(); }
+function renderPhotoPreview(){
+  const el = document.getElementById('photoPreview'); if(!el) return;
+  el.innerHTML = _photoFiles.map((f,i)=>
+    '<div style="position:relative;width:68px;height:68px;flex-shrink:0">'+
+      '<img src="'+URL.createObjectURL(f)+'" style="width:100%;height:100%;object-fit:cover;border-radius:10px;border:1px solid var(--line)">'+
+      '<button onclick="removePhotoFile('+i+')" aria-label="ลบรูป" style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:var(--red);color:#fff;border:2px solid #fff;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer">×</button>'+
+    '</div>'
+  ).join('') || '<div style="font-size:11.5px;color:var(--muted2)">ยังไม่มีรูปแนบ</div>';
+}
+// ลดขนาดรูปเหลือด้านยาวสุด maxDim px ก่อนอัปโหลด — ลดขนาดไฟล์ได้ 5-10 เท่าโดยแทบไม่เห็นความต่างของคุณภาพ
+function resizeImage(file, maxDim){
+  return new Promise(resolve=>{
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = ()=>{
+      let { width, height } = img;
+      if(width>maxDim || height>maxDim){ const s=maxDim/Math.max(width,height); width=Math.round(width*s); height=Math.round(height*s); }
+      const canvas = document.createElement('canvas'); canvas.width=width; canvas.height=height;
+      canvas.getContext('2d').drawImage(img,0,0,width,height);
+      canvas.toBlob(blob=>{ URL.revokeObjectURL(url); resolve(blob||file); }, 'image/jpeg', .82);
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+async function uploadPhotos(pathPrefix, onProgress){
+  let done = 0;
+  const urls = await Promise.all(_photoFiles.map(async file=>{
+    const blob = await resizeImage(file, 1600);
+    const path = pathPrefix+'/'+Date.now()+'_'+Math.random().toString(36).slice(2,8)+'.jpg';
+    const { error } = await sb.storage.from('field-photos').upload(path, blob);
+    done++; if(onProgress) onProgress(done, _photoFiles.length);
+    if(error){ toast('อัปโหลดรูปไม่สำเร็จ: '+error.message,'err'); return null; }
+    const { data: pub } = sb.storage.from('field-photos').getPublicUrl(path);
+    return pub.publicUrl;
+  }));
+  return urls.filter(Boolean);
+}
+
 /* ============================================================
  * FIELD REPORTS — รายงานผลหลังทำงานจริง (พร้อมรูป) เปิดจากปุ่มในหน้า Plan/Day หรือแท็บปฏิบัติงาน
  * ============================================================ */
-function openFieldReport(dailyPlanId, projectId, teamId){
-  const needPicker = !dailyPlanId;
+function fieldReportFieldsHtml(projectId, teamId, needPicker){
   const projOpts = state.projects.filter(p=>p.division_id===state.ws).map(p=>'<option value="'+p.id+'"'+(p.id===projectId?' selected':'')+'>'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
   const teamOpts = (state.cache.teams||[]).map(t=>'<option value="'+t.id+'"'+(t.id===teamId?' selected':'')+'>'+esc(t.name)+'</option>').join('');
-  document.getElementById('modalHost').innerHTML =
-    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
-    '<div class="modal-head"><span class="t">📝 รายงานผลหลังทำงาน</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
-    '<div class="modal-body">'+
-      (needPicker ? '<div class="row r2"><div class="field"><label>โครงการ</label><select id="fr_proj">'+projOpts+'</select></div><div class="field"><label>ทีม</label><select id="fr_team">'+(teamOpts||'<option value="">-</option>')+'</select></div></div>' : '')+
-      '<div class="row r2"><div class="field"><label>เวลาเริ่ม</label><input id="fr_start" type="time"></div><div class="field"><label>เวลาเลิก</label><input id="fr_end" type="time"></div></div>'+
-      '<div class="row r3"><div class="field"><label>คนงาน (คน)</label><input id="fr_labor" type="number" value="0"></div>'+
-      '<div class="field"><label>ผู้ควบคุมงาน (คน)</label><input id="fr_supervise" type="number" value="0"></div>'+
-      '<div class="field"><label>รวมทั้งหมด (คน)</label><input id="fr_total" type="number" value="0"></div></div>'+
-      '<div class="row r2"><div class="field"><label>สภาพอากาศ</label><select id="fr_weather"><option>แจ่มใส</option><option>ฝนตก</option><option>ฝนตกบางช่วง</option><option>เมฆมาก</option></select></div>'+
-      '<div class="field"><label>ปริมาณงานที่ทำได้</label><input id="fr_qty" type="number" step="0.01"></div></div>'+
-      '<div class="field"><label>หน่วย</label><input id="fr_unit" placeholder="เช่น เมตร, บ่อ"></div>'+
-      '<div class="field"><label>รายละเอียด</label><textarea id="fr_detail" rows="2"></textarea></div>'+
-      '<div class="field"><label>ปัญหาที่พบ (ถ้ามี)</label><textarea id="fr_problem" rows="2"></textarea></div>'+
-      '<div class="row r2"><div class="field"><label>ความรุนแรง</label><select id="fr_severity"><option value="">— ไม่มีปัญหา —</option><option>น้อย</option><option>ปานกลาง</option><option>มาก</option></select></div>'+
-      '<div class="field"><label>ต้องการความช่วยเหลือ</label><input id="fr_help"></div></div>'+
-      '<div class="field"><label>รูปถ่ายหน้างาน (เลือกได้หลายรูป)</label><input id="fr_photos" type="file" accept="image/*" multiple></div>'+
-    '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
-      '<button class="btn btn-primary" id="fr_save" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveFieldReport(\''+(dailyPlanId||'')+'\',\''+(projectId||'')+'\',\''+(teamId||'')+'\')">บันทึกรายงาน</button></div></div></div>';
+  return (needPicker ? '<div class="row r2"><div class="field"><label>โครงการ</label><select id="fr_proj">'+projOpts+'</select></div><div class="field"><label>ทีม</label><select id="fr_team">'+(teamOpts||'<option value="">-</option>')+'</select></div></div>' : '')+
+    '<div class="row r2"><div class="field"><label>เวลาเริ่ม</label><input id="fr_start" type="time"></div><div class="field"><label>เวลาเลิก</label><input id="fr_end" type="time"></div></div>'+
+    '<div class="row r3"><div class="field"><label>คนงาน (คน)</label><input id="fr_labor" type="number" value="0"></div>'+
+    '<div class="field"><label>ผู้ควบคุมงาน (คน)</label><input id="fr_supervise" type="number" value="0"></div>'+
+    '<div class="field"><label>รวมทั้งหมด (คน)</label><input id="fr_total" type="number" value="0"></div></div>'+
+    '<div class="row r2"><div class="field"><label>สภาพอากาศ</label><select id="fr_weather"><option>แจ่มใส</option><option>ฝนตก</option><option>ฝนตกบางช่วง</option><option>เมฆมาก</option></select></div>'+
+    '<div class="field"><label>ปริมาณงานที่ทำได้</label><input id="fr_qty" type="number" step="0.01"></div></div>'+
+    '<div class="field"><label>หน่วย</label><input id="fr_unit" placeholder="เช่น เมตร, บ่อ"></div>'+
+    '<div class="field"><label>รายละเอียด</label><textarea id="fr_detail" rows="2"></textarea></div>'+
+    '<div class="field"><label>ปัญหาที่พบ (ถ้ามี)</label><textarea id="fr_problem" rows="2"></textarea></div>'+
+    '<div class="row r2"><div class="field"><label>ความรุนแรง</label><select id="fr_severity"><option value="">— ไม่มีปัญหา —</option><option>น้อย</option><option>ปานกลาง</option><option>มาก</option></select></div>'+
+    '<div class="field"><label>ต้องการความช่วยเหลือ</label><input id="fr_help"></div></div>'+
+    photoPickerHtml();
+}
+function openFieldReport(dailyPlanId, projectId, teamId){
+  _photoFiles = [];
+  const needPicker = !dailyPlanId;
+  const body = fieldReportFieldsHtml(projectId, teamId, needPicker);
+  const saveOnclick = "saveFieldReport('"+(dailyPlanId||'')+"','"+(projectId||'')+"','"+(teamId||'')+"')";
+  if(isMobileMode()){
+    hideMobileNav();
+    content(mobileFormShell('📝 รายงานผลหลังทำงาน', body,
+      '<button class="btn btn-primary touch-lg" id="fr_save" style="--acc:var(--teal);--acc2:#14b8a6" onclick="'+saveOnclick+'">บันทึกรายงาน</button>'));
+  } else {
+    document.getElementById('modalHost').innerHTML =
+      '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
+      '<div class="modal-head"><span class="t">📝 รายงานผลหลังทำงาน</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+      '<div class="modal-body">'+body+
+      '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+        '<button class="btn btn-primary" id="fr_save" style="--acc:var(--teal);--acc2:#14b8a6" onclick="'+saveOnclick+'">บันทึกรายงาน</button></div></div></div>';
+  }
+  renderPhotoPreview();
 }
 async function saveFieldReport(dailyPlanId, projectId, teamId){
   const g=k=>(document.getElementById(k)||{}).value;
-  if(!dailyPlanId){ // opened without a specific Gantt task — read project/team from the pickers shown in the modal
+  if(!dailyPlanId){ // opened without a specific Gantt task — read project/team from the pickers shown in the form
     const pel=document.getElementById('fr_proj'); if(pel) projectId = pel.value;
     const tel=document.getElementById('fr_team'); if(tel) teamId = tel.value;
   }
   const btn = document.getElementById('fr_save'); btn.disabled=true; btn.textContent='กำลังบันทึก...';
   try{
     const { data:{ user } } = await sb.auth.getUser();
-    const files = (document.getElementById('fr_photos').files)||[];
-    const photoUrls = [];
-    for(const file of files){
-      const path = (projectId||'misc')+'/'+Date.now()+'_'+file.name;
-      const { error: upErr } = await sb.storage.from('field-photos').upload(path, file);
-      if(upErr){ toast('อัปโหลดรูปไม่สำเร็จ: '+upErr.message,'err'); continue; }
-      const { data: pub } = sb.storage.from('field-photos').getPublicUrl(path);
-      photoUrls.push(pub.publicUrl);
-    }
+    const photoUrls = await uploadPhotos(projectId||'misc', (done,total)=>{ if(total) btn.textContent='กำลังอัปโหลดรูป '+done+'/'+total+'...'; });
     const rec = { daily_plan_id: dailyPlanId||null, project_id: projectId||null, team_id: teamId||null, division_id: state.ws,
       report_date: new Date().toISOString().slice(0,10),
       time_start:g('fr_start'), time_end:g('fr_end'), labor_count:+g('fr_labor')||0, supervise_count:+g('fr_supervise')||0,
@@ -2261,9 +2438,11 @@ async function saveFieldReport(dailyPlanId, projectId, teamId){
       photos: photoUrls, submitted_by: user.id };
     const { error } = await sb.from('field_reports').insert(rec);
     if(error){ toast(error.message,'err'); return; }
-    closeModal(); toast('บันทึกรายงานผลเรียบร้อย','ok');
-    if(state.sub==='ops' && state.opsTab==='reports') renderOpsReports(divCfg(state.ws));
-  } finally { btn.disabled=false; btn.textContent='บันทึกรายงาน'; }
+    toast('บันทึกรายงานผลเรียบร้อย','ok');
+    _photoFiles = [];
+    if(isMobileMode()){ renderOpsPage(); renderMobileNav(); }
+    else { closeModal(); if(state.sub==='ops' && state.opsTab==='reports') renderOpsReports(divCfg(state.ws)); }
+  } finally { const b=document.getElementById('fr_save'); if(b){ b.disabled=false; b.textContent='บันทึกรายงาน'; } }
 }
 
 /* ============================================================
