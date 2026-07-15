@@ -2178,7 +2178,7 @@ async function renderOpsPage(){
   const canLead = canApproveReq();
   const tabs = [];
   if(canLead) tabs.push(['dash','สรุป'],['wo','ใบสั่งงาน']);
-  tabs.push(['today','งานวันนี้'],['submit','ส่งแผนพรุ่งนี้'],['req','เบิกของ'],['items','คลังไอเทม'],['reports','รายงานผล']);
+  tabs.push(['today','งานวันนี้'],['submit','ตั้งงาน'],['cal','ปฏิทิน'],['req','เบิกของ'],['items','คลังไอเทม'],['reports','รายงานผล']);
   if(canLead) tabs.push(['approvals','รออนุมัติ']);
   const tabBar = mob ? '' :
     '<div style="display:flex;background:#fff;border:1px solid var(--line);border-radius:16px;padding:3px;margin-bottom:14px;flex-wrap:wrap;gap:2px">'+
@@ -2190,6 +2190,7 @@ async function renderOpsPage(){
   else if(state.opsTab==='wo' && canLead) await renderOpsWO(D);
   else if(state.opsTab==='today') await renderOpsToday(D);
   else if(state.opsTab==='submit') await renderOpsSubmit(D);
+  else if(state.opsTab==='cal') await renderOpsCalendar(D);
   else if(state.opsTab==='req') await renderOpsReq(D);
   else if(state.opsTab==='items') await renderOpsItems(D);
   else if(state.opsTab==='reports') await renderOpsReports(D);
@@ -2399,53 +2400,142 @@ async function renderOpsToday(D){
 }
 
 /* ---------- ส่งแผนพรุ่งนี้ (รออนุมัติ) ---------- */
-// checklist ยานพาหนะ/เครื่องจักรหนักในแผนงาน (อ้างอิงฟอร์มกระดาษ "แผนปฏิบัติงานรายวัน") — ใช้ CSS .req-* ร่วมกับ checklist เบิกของ
-function planVehicleChecklistHtml(items){
-  if(!items.length) return '<div class="empty" style="padding:16px">ยังไม่มีรายการเครื่องจักรหนัก/รถเช่าในคลัง — เพิ่มที่แท็บ "คลังไอเทม"</div>';
-  return '<div class="req-check" style="max-height:280px">'+items.map(i=>
-    '<label class="req-row" style="grid-template-columns:18px 1fr 130px"><input type="checkbox" class="veh-chk" data-name="'+esc(i.name)+'" onchange="toggleReqRow(this)">'+
-    '<span class="req-name">'+esc(i.name)+'</span>'+
-    '<input type="text" class="req-asset veh-detail" placeholder="ทะเบียน/จำนวน/หัวสกัด" disabled onclick="event.stopPropagation()">'+
-    '</label>'
-  ).join('')+'</div>';
-}
+/* ---------- ตั้งงาน — งาน + เบิกของ/รถ ไปด้วยกันเป็นชุดเดียว ส่งให้ PM อนุมัติทีเดียวจบ
+   (แทนที่ "ส่งแผนพรุ่งนี้" เดิมที่แนบได้แค่รถคันเดียว — ตอนนี้แนบของ/รถได้ทุกหมวดจากคลังเดียวกับ "เบิกของ") ---------- */
 async function renderOpsSubmit(D){
   const body = document.getElementById('opsBody'); if(!body) return;
   const mob = isMobileMode();
-  const { data: items } = await sb.from('item_catalog').select('*').eq('division_id',state.ws).eq('category','เครื่องจักรหนัก/รถเช่า').eq('active',true).order('name');
-  state.cache.planVehItems = items||[];
+  const { data: items } = await sb.from('item_catalog').select('*').eq('division_id',state.ws).eq('active',true).order('category').order('name');
+  state.cache.reqItems = items||[];
   const teamOpts = (state.cache.teams||[]).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
   const projOpts = state.projects.filter(p=>p.division_id===state.ws).map(p=>'<option value="'+p.id+'">'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
-  body.innerHTML = '<div class="card" style="'+(mob?'':'max-width:640px')+'"><div class="card-t" style="margin-bottom:14px">ส่งแผนงานวันพรุ่งนี้ (รอ PM อนุมัติ)</div>'+
+  body.innerHTML = '<div class="card" style="'+(mob?'':'max-width:640px')+'"><div class="card-t" style="margin-bottom:2px">ตั้งงานใหม่</div>'+
+    '<div class="card-sub" style="margin-bottom:14px">แนบของ/รถที่ต้องใช้ไปพร้อมกันได้เลย — PM อนุมัติทีเดียวจบทั้งงานและของที่เบิก</div>'+
     '<div class="row r2"><div class="field"><label>ทีม</label><select id="sp_team">'+(teamOpts||'<option value="">— ยังไม่มีทีม —</option>')+'</select></div>'+
     '<div class="field"><label>กะ</label><select id="sp_shift"><option>กลางวัน</option><option>กลางคืน</option></select></div></div>'+
     '<div class="field"><label>โครงการ</label><select id="sp_proj">'+projOpts+'</select></div>'+
-    '<div class="field"><label>วันที่ปฏิบัติงาน</label><input id="sp_date" type="date" value="'+ymdOffset(1)+'"></div>'+
+    '<div class="field"><label>วันที่ปฏิบัติงาน</label><input id="sp_date" type="date" value="'+(state.cache.calPrefillDate||ymdOffset(1))+'"></div>'+
+    (state.cache.calPrefillDate ? '<div class="inline-warn" style="display:block;color:var(--teal);margin-bottom:12px">📅 ตั้งจากปฏิทิน — ตรวจวันที่ให้ถูกก่อนส่ง</div>' : '')+
     '<div class="field"><label>งานที่จะทำ</label><input id="sp_task" placeholder="เช่น ลงท่อ + กลบบ่อ"></div>'+
     '<div class="field"><label>ตำแหน่งงาน (ถนน/ซอย)</label><input id="sp_loc" placeholder="เช่น แยกเกียกกาย"></div>'+
     '<div class="field"><label>ตำแหน่งลงงาน (บ่อ)</label><input id="sp_manhole" placeholder="เช่น MH.TH02 → MH.TH03"></div>'+
     '<div class="row r3"><div class="field"><label>ระยะ (วัน)</label><input id="sp_dur" type="number" value="1"></div>'+
     '<div class="field"><label>คนงานชาย</label><input id="sp_male" type="number" value="0"></div>'+
     '<div class="field"><label>คนงานหญิง</label><input id="sp_female" type="number" value="0"></div></div>'+
-    '<div class="field"><label>ยานพาหนะ/เครื่องจักรหนักที่ขอเช่า (ติ๊กแล้วกรอกทะเบียน/จำนวน)</label>'+planVehicleChecklistHtml(state.cache.planVehItems)+'</div>'+
-    '<button class="btn btn-primary '+(mob?'touch-lg btn-block':'')+'" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="saveSubmitPlan()">ส่งแผนรออนุมัติ</button>'+
+    '<div class="field"><label>ของ/รถที่ต้องใช้ (ติ๊กแล้วกรอกจำนวน/เบอร์ — เว้นว่างได้ถ้ายังไม่ต้องเบิก)</label>'+requisitionChecklistHtml()+'</div>'+
+    '<button class="btn btn-primary '+(mob?'touch-lg btn-block':'')+'" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="saveSubmitPlan()">ส่งงาน + คำขอเบิก</button>'+
     '</div>';
+  state.cache.calPrefillDate = null; // ใช้ครั้งเดียวตอนกดจากปฏิทิน ไม่ให้ค้างติดวันเดิมทุกครั้งที่เข้าแท็บนี้
 }
 async function saveSubmitPlan(){
   const g=k=>(document.getElementById(k)||{}).value;
   const task = g('sp_task').trim();
   if(!task){ toast('กรอกงานที่จะทำ','err'); return; }
-  const vehicleDetail = Array.from(document.querySelectorAll('.veh-chk:checked')).map(cb=>
-    ({ name: cb.dataset.name, detail: cb.closest('.req-row').querySelector('.veh-detail').value.trim() }));
+  const projId = g('sp_proj'), teamId = g('sp_team')||null, when = g('sp_date');
   const locDetail = g('sp_loc') + (g('sp_manhole') ? (g('sp_loc')?' · ':'')+'บ่อ '+g('sp_manhole') : '');
   const { data:{ user } } = await sb.auth.getUser();
-  const rec = { division_id:state.ws, plan_date:g('sp_date'), start_date:g('sp_date'), team_id:g('sp_team')||null, project_id:g('sp_proj')||null,
+  const planRec = { division_id:state.ws, plan_date:when, start_date:when, team_id:teamId, project_id:projId||null,
     task, shift:g('sp_shift'), location_detail:locDetail, duration:+g('sp_dur')||1, pct:0,
-    headcount_male:+g('sp_male')||0, headcount_female:+g('sp_female')||0, vehicle_detail:vehicleDetail,
+    headcount_male:+g('sp_male')||0, headcount_female:+g('sp_female')||0,
     status:'รออนุมัติ', created_by:user.id };
-  const { error } = await sb.from('daily_plan').insert(rec);
+  const { data: plan, error } = await sb.from('daily_plan').insert(planRec).select().single();
   if(error){ toast(error.message,'err'); return; }
-  toast('ส่งแผนเรียบร้อย รอ PM อนุมัติ','ok'); renderOpsPage();
+  const checked = Array.from(document.querySelectorAll('.req-chk:checked'));
+  if(checked.length){
+    const recs = checked.map(cb=>{
+      const id = cb.dataset.itemId;
+      const item = (state.cache.reqItems||[]).find(i=>i.id===id) || {};
+      const qtyEl = document.querySelector('.req-qty[data-item-id="'+id+'"]');
+      const assetEl = document.querySelector('.req-asset[data-item-id="'+id+'"]');
+      return { project_id:projId||null, division_id:state.ws, team_id:teamId, kind:item.kind||'วัสดุ',
+        item_id:id, item:item.name||'', qty:+qtyEl.value||1, asset_no:assetEl.value.trim()||null,
+        daily_plan_id: plan.id, reason:task, detail:'', when_date:when, status:'รออนุมัติ', created_by:user.id };
+    });
+    const { error: reqErr } = await sb.from('requisitions').insert(recs);
+    if(reqErr){ toast('บันทึกงานสำเร็จ แต่แนบของไม่สำเร็จ: '+reqErr.message,'err'); renderOpsPage(); return; }
+  }
+  toast('ส่งงาน'+(checked.length?' + ของ '+checked.length+' รายการ':'')+'เรียบร้อย รอ PM อนุมัติ','ok'); renderOpsPage();
+}
+
+/* ---------- ปฏิทิน — ทีมไหนลงงานที่ไหนในแต่ละวัน แบบปฏิทินเดือนจริง (ต่างจากหน้า "วางแผน" เดิมที่เป็นแผนราย
+   เดือน/ปีระดับ MS-Project สำหรับวางกำลังคน/โครงการ — อันนี้คือตารางปฏิบัติงานจริงรายวัน) กดวันว่างเพื่อตั้งงานใหม่ได้เลย ---------- */
+function calShiftMonth(n){ state.cache.calMonthOffset=(state.cache.calMonthOffset||0)+n; renderOpsCalendar(divCfg(state.ws)); }
+function calJumpToday(){ state.cache.calMonthOffset=0; renderOpsCalendar(divCfg(state.ws)); }
+function calMonthWindow(){
+  const now = new Date(); const offset = state.cache.calMonthOffset||0;
+  const monthStart = new Date(now.getFullYear(), now.getMonth()+offset, 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth()+offset+1, 0);
+  const gridStart = addDays(monthStart, -monthStart.getDay());
+  const gridEnd = addDays(monthEnd, 6-monthEnd.getDay());
+  return { monthStart, monthEnd, gridStart, gridEnd };
+}
+async function renderOpsCalendar(D){
+  const body = document.getElementById('opsBody'); if(!body) return;
+  const { monthStart, gridStart, gridEnd } = calMonthWindow();
+  const { data: rows } = await sb.from('daily_plan').select('*').eq('division_id',state.ws).in('status',['อนุมัติ','รออนุมัติ'])
+    .gte('start_date', ymd(addDays(gridStart,-60))).lte('start_date', ymd(gridEnd)).order('created_at');
+  state.cache.calRows = rows||[];
+  const teamOpts = '<option value="">ทุกทีม</option>'+(state.cache.teams||[]).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
+  const nav = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">'+
+    '<button class="btn btn-ghost btn-sm" onclick="calShiftMonth(-1)">‹ เดือนก่อน</button>'+
+    '<button class="btn btn-ghost btn-sm" onclick="calJumpToday()">เดือนนี้</button>'+
+    '<button class="btn btn-ghost btn-sm" onclick="calShiftMonth(1)">เดือนถัดไป ›</button>'+
+    '<span style="font-size:13px;font-weight:700;color:var(--ink);margin-left:6px">'+MONTH_T[monthStart.getMonth()]+' '+(monthStart.getFullYear()+543)+'</span>'+
+    '<div style="flex:1"></div>'+
+    '<select id="cal_teamf" onchange="renderCalGrid()" style="border:1px solid var(--line2);background:#fff;border-radius:12px;padding:7px 10px;font-size:12px">'+teamOpts+'</select>'+
+    '</div>';
+  body.innerHTML = nav+'<div id="calGrid"></div>';
+  renderCalGrid();
+}
+function renderCalGrid(){
+  const grid = document.getElementById('calGrid'); if(!grid) return;
+  const teamF = (document.getElementById('cal_teamf')||{}).value||'';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const { monthStart, gridStart, gridEnd } = calMonthWindow();
+  const numDays = Math.round((gridEnd-gridStart)/86400000)+1;
+  const canAdd = canWrite(state.ws);
+  const rows = (state.cache.calRows||[]).filter(r=>!teamF || r.team_id===teamF);
+  const byDate = {};
+  rows.forEach(r=>{
+    const s = new Date(r.start_date+'T00:00:00'); const dur = Math.max(1,+r.duration||1);
+    for(let i=0;i<dur;i++){ const d=addDays(s,i); if(d<gridStart||d>gridEnd) continue; (byDate[ymd(d)]=byDate[ymd(d)]||[]).push(r); }
+  });
+  const teamColor = tid => { const idx=(state.cache.teams||[]).findIndex(t=>t.id===tid); return TEAM_TAG_COLORS[(idx<0?0:idx)%TEAM_TAG_COLORS.length]; };
+  let cells='';
+  for(let i=0;i<numDays;i++){
+    const d = addDays(gridStart,i); const key = ymd(d);
+    const inMonth = d.getMonth()===monthStart.getMonth(); const isToday = key===ymd(today);
+    const items = byDate[key]||[];
+    const chips = items.slice(0,3).map(r=>{
+      const team=(state.cache.teams||[]).find(t=>t.id===r.team_id); const tc = teamColor(r.team_id); const pending = r.status==='รออนุมัติ';
+      return '<div onclick="event.stopPropagation();openCalTaskDetail(\''+r.id+'\')" style="font-size:10px;padding:2px 5px;border-radius:6px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;'+
+        (pending?'border:1px dashed '+tc+';color:'+tc:'background:'+tc+';color:#fff')+'">'+esc(team?team.name.replace(/^ทีม\s*/,''):'-')+' · '+esc(r.task)+'</div>';
+    }).join('');
+    const more = items.length>3 ? '<div style="font-size:9.5px;color:var(--muted2)">+'+(items.length-3)+' อื่นๆ</div>' : '';
+    cells += '<div'+(canAdd?' onclick="calQuickAdd(\''+key+'\')"':'')+' style="min-height:88px;border:1px solid #EEF1F8;padding:5px;'+(inMonth?'background:#fff':'background:#FAFBFD')+(canAdd?';cursor:pointer':'')+'">'+
+      '<div style="display:flex;justify-content:flex-end"><span style="font-size:11px;font-weight:'+(isToday?'700':'500')+';color:'+(isToday?'#fff':(inMonth?'var(--ink)':'var(--muted2)'))+';background:'+(isToday?'var(--red)':'transparent')+';width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+d.getDate()+'</span></div>'+
+      chips+more+'</div>';
+  }
+  const wd = ['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
+  grid.innerHTML = '<div class="card" style="padding:0;overflow:hidden">'+
+    '<div style="display:grid;grid-template-columns:repeat(7,1fr);background:#F3F6FC;border-bottom:1px solid var(--line2)">'+wd.map(w=>'<div style="padding:8px;text-align:center;font-size:11px;font-weight:700;color:#5B6B84">'+w+'</div>').join('')+'</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(7,1fr)">'+cells+'</div></div>'+
+    '<div style="margin-top:10px;font-size:11px;color:var(--muted)">'+(canAdd?'คลิกวันที่ว่างเพื่อตั้งงานใหม่ในวันนั้น · ':'')+'เส้นประ = รอ PM อนุมัติ, พื้นทึบสี = อนุมัติแล้ว</div>';
+}
+function calQuickAdd(dateStr){ state.cache.calPrefillDate = dateStr; switchOpsTab('submit'); }
+function openCalTaskDetail(id){
+  const r = (state.cache.calRows||[]).find(x=>x.id===id); if(!r) return;
+  const proj = state.projects.find(p=>p.id===r.project_id); const team=(state.cache.teams||[]).find(t=>t.id===r.team_id);
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:420px">'+
+    '<div class="modal-head"><span class="t">'+(r.wo_code?esc(r.wo_code)+' · ':'')+'รายละเอียดงาน</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body">'+
+      '<div style="font-size:14px;font-weight:700;color:var(--ink);margin-bottom:6px">'+esc(r.task)+'</div>'+
+      '<div style="font-size:12px;color:var(--ink2);margin-bottom:10px">'+esc(team?team.name:'-')+' · '+esc(proj?proj.code:'-')+' · '+thDate(r.start_date)+(r.duration>1?' ('+r.duration+' วัน)':'')+(r.location_detail?' · '+esc(r.location_detail):'')+'</div>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">'+reqStatusPill(r.status)+(r.wo_status?woStatusPill(r.wo_status):'')+'</div>'+
+    '</div><div class="modal-foot">'+
+      (r.status==='อนุมัติ' && canSubmitField(state.ws) ? '<button class="btn btn-ghost" onclick="closeModal();openFieldReport(\''+r.id+'\',\''+(r.project_id||'')+'\',\''+(r.team_id||'')+'\')">📝 รายงานผล</button>' : '')+
+      '<div style="flex:1"></div><button class="btn btn-ghost" onclick="closeModal()">ปิด</button></div></div></div>';
 }
 
 /* ---------- เบิกของ (อ้างอิงคลังไอเทมจริง + คืนของ) ---------- */
@@ -2559,7 +2649,7 @@ async function saveRequisition(){
     const assetEl = document.querySelector('.req-asset[data-item-id="'+id+'"]');
     return { project_id:projId, division_id:state.ws, team_id:teamId, kind:item.kind||'วัสดุ',
       item_id:id, item:item.name||'', qty:+qtyEl.value||1, asset_no:assetEl.value.trim()||null,
-      reason, detail:'', when_date:when, created_by:user.id };
+      reason, detail:'', when_date:when, status:'รออนุมัติ', created_by:user.id };
   });
   const { error } = await sb.from('requisitions').insert(recs);
   if(error){ toast(error.message,'err'); return; }
@@ -2726,24 +2816,27 @@ async function saveApplyProgress(){
 /* ---------- รออนุมัติ (กล่องรวม: แผนงาน + คำขอเบิก) ---------- */
 async function renderOpsApprovals(D){
   const projIds = state.projects.filter(p=>p.division_id===state.ws).map(p=>p.id);
-  const [{data:plans},{data:reqs}] = await Promise.all([
+  const [{data:plans},{data:allReqs}] = await Promise.all([
     sb.from('daily_plan').select('*').eq('division_id',state.ws).eq('status','รออนุมัติ').order('created_at'),
     sb.from('requisitions').select('*').in('project_id', projIds.length?projIds:['00000000-0000-0000-0000-000000000000']).eq('status','รออนุมัติ').order('created_at'),
   ]);
+  // ของ/รถที่แนบมากับงาน (daily_plan_id ตรงกัน) โชว์รวมในการ์ดงานเลย ไม่ต้องอนุมัติแยก — เหลือแค่คำขอเบิกแบบ ad-hoc (ไม่ผูกงาน) ในกล่องขวา
+  const reqs = (allReqs||[]).filter(r=>!r.daily_plan_id);
+  const reqsByPlan = {}; (allReqs||[]).forEach(r=>{ if(r.daily_plan_id) (reqsByPlan[r.daily_plan_id]=reqsByPlan[r.daily_plan_id]||[]).push(r); });
   const body = document.getElementById('opsBody'); if(!body) return;
   const mob = isMobileMode();
   const btnCls = mob ? 'touch-lg' : 'btn-sm';
   const planCards = !plans||!plans.length ? '<div class="empty">ไม่มีแผนรออนุมัติ</div>' : plans.map(pl=>{
       const proj=state.projects.find(p=>p.id===pl.project_id); const team=state.cache.teams.find(t=>t.id===pl.team_id);
-      const veh = (pl.vehicle_detail||[]);
+      const attached = reqsByPlan[pl.id]||[];
       return (mob?'<div class="mc">':'<div style="padding:10px 0;border-bottom:1px solid #EEF1F8">')+
         '<div style="font-size:'+(mob?'14px':'12.5px')+';font-weight:600">'+esc(pl.task)+'</div>'+
         '<div style="font-size:11.5px;color:var(--muted2);margin:2px 0 8px">'+esc(team?team.name:'-')+' · '+esc(proj?proj.code:'-')+' · '+thDate(pl.plan_date)+' · '+esc(pl.shift||'')+
         (pl.location_detail?' · '+esc(pl.location_detail):'')+'</div>'+
-        (veh.length ? '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">'+veh.map(v=>
-          '<span class="pill" style="background:var(--amber-soft);color:var(--amber)">🚜 '+esc(v.name)+(v.detail?' · '+esc(v.detail):'')+'</span>').join('')+'</div>' : '')+
+        (attached.length ? '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">'+attached.map(r=>
+          '<span class="pill" style="background:var(--amber-soft);color:var(--amber)">'+(REQ_KIND_ICON[r.kind]||'')+' '+esc(r.item)+(r.qty&&+r.qty!==1?' ×'+fmt(r.qty):'')+'</span>').join('')+'</div>' : '')+
         '<div style="display:flex;gap:8px'+(mob?';flex-direction:column':'')+'">'+
-        '<button class="btn btn-primary '+btnCls+(mob?' btn-block':'')+'" style="--acc:var(--teal);--acc2:#14b8a6" onclick="setPlanApproval(\''+pl.id+'\',\'อนุมัติ\')">อนุมัติ</button>'+
+        '<button class="btn btn-primary '+btnCls+(mob?' btn-block':'')+'" style="--acc:var(--teal);--acc2:#14b8a6" onclick="setPlanApproval(\''+pl.id+'\',\'อนุมัติ\')">อนุมัติ'+(attached.length?' (+ของ '+attached.length+')':'')+'</button>'+
         '<button class="btn btn-ghost '+btnCls+(mob?' btn-block':'')+'" onclick="setPlanApproval(\''+pl.id+'\',\'ปฏิเสธ\')">ปฏิเสธ</button></div></div>';
     }).join('');
   const reqCards = !reqs||!reqs.length ? '<div class="empty">ไม่มีคำขอเบิกรออนุมัติ</div>' : reqs.map(r=>{
@@ -2769,12 +2862,17 @@ async function renderOpsApprovals(D){
 function genWoCode(){ return 'WO-'+Math.random().toString(36).slice(2,7).toUpperCase(); }
 async function setPlanApproval(id, status){
   const rec = { status };
+  const { data:{ user } } = await sb.auth.getUser();
   if(status==='อนุมัติ'){
-    rec.approved_by = (await sb.auth.getUser()).data.user.id; rec.approved_at = new Date().toISOString();
+    rec.approved_by = user.id; rec.approved_at = new Date().toISOString();
     rec.wo_code = genWoCode(); rec.wo_status = 'รอเริ่ม'; // อนุมัติแผน = สร้างใบสั่งงานอัตโนมัติ (ตามสเปค FieldSync)
   }
   const { error } = await sb.from('daily_plan').update(rec).eq('id', id);
   if(error){ toast(error.message,'err'); return; }
+  // ของ/รถที่แนบมากับงานนี้ (daily_plan_id ตรงกัน) อนุมัติ/ปฏิเสธไปพร้อมกันเป็นชุดเดียว — ไม่ต้องกดซ้ำทีละรายการ
+  const reqRec = { status };
+  if(status==='อนุมัติ'){ reqRec.approved_by = user.id; reqRec.approved_at = new Date().toISOString(); }
+  await sb.from('requisitions').update(reqRec).eq('daily_plan_id', id).eq('status','รออนุมัติ');
   toast(status+'เรียบร้อย'+(rec.wo_code?' — สร้างใบสั่งงาน '+rec.wo_code:''),'ok'); renderOpsApprovals(divCfg(state.ws));
 }
 
