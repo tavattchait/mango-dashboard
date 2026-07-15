@@ -180,6 +180,25 @@ td.num,th.num{text-align:right}
 .rowlink:hover{color:var(--teal)}
 .empty{text-align:center;color:var(--muted);padding:42px 20px;font-size:13px}
 
+/* ---------- checklist เบิกของ (อ้างอิงฟอร์มกระดาษ CMT01) ---------- */
+.req-check{border:1px solid var(--line2);border-radius:12px;overflow:hidden;max-height:360px;overflow-y:auto}
+.req-cat-sect{background:#F3F6FC;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:7px 12px;position:sticky;top:0}
+.req-row{display:grid;grid-template-columns:18px 1fr 64px 90px;gap:8px;align-items:center;padding:7px 12px;border-top:1px solid #F1F3F9;cursor:pointer}
+.req-row.on{background:var(--teal-soft)}
+.req-row input[type=checkbox]{width:16px;height:16px;accent-color:var(--teal);cursor:pointer}
+.req-name{font-size:12.5px;color:var(--ink2)}
+.req-unit{color:var(--muted2);font-size:11px}
+.req-qty,.req-asset{border:1px solid var(--line2);border-radius:8px;padding:4px 6px;font-size:11.5px;background:#fff;font-family:inherit}
+.req-qty:disabled,.req-asset:disabled{background:var(--soft);color:var(--muted2)}
+.req-qty{text-align:right}
+@media(max-width:520px){
+  .req-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+  .req-name{flex:1 1 100%;order:1}
+  .req-row input[type=checkbox]{order:0}
+  .req-qty{order:2;width:56px}
+  .req-asset{order:3;flex:1;min-width:80px}
+}
+
 /* ---------- ตารางแก้ไข WBS แบบ Excel (input/select ในแต่ละ cell) ---------- */
 .wbs-table td{padding:2px 4px;white-space:nowrap}
 .wbs-in{width:100%;border:1px solid transparent;background:transparent;padding:7px 8px;border-radius:8px;
@@ -473,14 +492,58 @@ function buildMockDb(){
     { id:genId(), division_id:'pc', name:'ทีม D โยธา/บ่อปูน', members:['ประเสริฐ มั่นคง'] },
   ];
 
-  // คลังไอเทมเบิกจริง (รถ/เครื่องมือ/วัสดุ) — ต่อยอดจากเดโม่ FieldSync ให้เลือกจากรายการแทนพิมพ์เอง
-  const itemSeed = [
-    ['pjcm','รถ','รถเครน 10 ตัน','คัน'], ['pjcm','รถ','รถแบ็คโฮ PC30','คัน'],
-    ['pjcm','เครื่องมือ','เครื่อง HDD เจาะดันท่อ','เครื่อง'], ['pjcm','วัสดุ','ท่อ HDPE 110mm','เมตร'],
-    ['en','รถ','รถกระเช้า 12 เมตร','คัน'], ['en','เครื่องมือ','เครื่องมือขันแรงบิด','ชุด'], ['en','วัสดุ','แผงโซลาร์ 550W','แผง'],
-    ['pc','รถ','รถโม่ปูน','คัน'], ['pc','เครื่องมือ','เครื่องสั่นคอนกรีต','เครื่อง'], ['pc','วัสดุ','ปูนซีเมนต์','ตัน'],
+  // คลังไอเทมเบิกจริง — อ้างอิงฟอร์มกระดาษ CMT01 (ใบเบิกเครื่องมือเครื่องจักรประจำวัน) ให้ครบทุกหมวด
+  // แต่ละแถว: [category, kind, name, unit] — ใช้ชุดเดียวกันทุกฝ่าย (แก้ไข/ปิดใช้งานทีหลังได้จากหน้า "คลังไอเทม")
+  const CMT01_ITEMS = [
+    // เครื่องจักรหนัก/รถเช่า
+    ['เครื่องจักรหนัก/รถเช่า','รถ','รถแบ็คโฮ U15-3','คัน'], ['เครื่องจักรหนัก/รถเช่า','รถ','รถแบ็คโฮ PC30','คัน'],
+    ['เครื่องจักรหนัก/รถเช่า','รถ','รถแบ็คโฮแทร็คเหล็ก PC','คัน'], ['เครื่องจักรหนัก/รถเช่า','รถ','รถแบ็คโฮล้อยาง PW','คัน'],
+    ['เครื่องจักรหนัก/รถเช่า','เครื่องมือ','เครื่อง HDD เจาะดันท่อ','เครื่อง'], ['เครื่องจักรหนัก/รถเช่า','เครื่องมือ','เครื่อง Pipe Jacking','เครื่อง'],
+    ['เครื่องจักรหนัก/รถเช่า','รถ','รถ 6 ล้อดั้ม 3 คิว','คัน'], ['เครื่องจักรหนัก/รถเช่า','รถ','รถ 6 ล้อดั้ม 5 คิว','คัน'],
+    ['เครื่องจักรหนัก/รถเช่า','รถ','รถ 10 ล้อดั้มรายวัน','คัน'], ['เครื่องจักรหนัก/รถเช่า','รถ','รถ 10 ล้อดั้มเหมาเที่ยว','คัน'],
+    ['เครื่องจักรหนัก/รถเช่า','รถ','รถ 10 ล้อ','คัน'], ['เครื่องจักรหนัก/รถเช่า','รถ','รถเครน','คัน'],
+    ['เครื่องจักรหนัก/รถเช่า','รถ','รถแบ็คโฮบูมยาว','คัน'], ['เครื่องจักรหนัก/รถเช่า','รถ','รถเทรลเลอร์','คัน'],
+    // เครื่องมือไฟฟ้า/เครื่องจักรเล็ก
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','เครื่องตัดคอนกรีต 18"','เครื่อง'], ['เครื่องมือไฟฟ้า','เครื่องมือ','เครื่องตบดินเล็ก','เครื่อง'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','เครื่องตบกระโดด Tamping Rammer 70KG','เครื่อง'], ['เครื่องมือไฟฟ้า','เครื่องมือ','เครื่องบดอัดดิน Vibration Roller 1t','เครื่อง'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','พัดลมดูดอากาศ+ท่อลม 10"','ชุด'], ['เครื่องมือไฟฟ้า','เครื่องมือ','พัดลมดูดอากาศ+ท่อลม 12"','ชุด'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','พัดลมดูดอากาศ+ท่อลม 16"','ชุด'], ['เครื่องมือไฟฟ้า','เครื่องมือ','Duct Rodder (ดักกรด) ใหญ่','ชุด'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','Duct Rodder (ดักกรด) เล็ก','ชุด'], ['เครื่องมือไฟฟ้า','เครื่องมือ','เทปวัดระยะ 100 เมตร','ม้วน'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','เทปวัดระยะ 50 เมตร','ม้วน'], ['เครื่องมือไฟฟ้า','เครื่องมือ','เครื่องสกัดคอนกรีตไฟฟ้า','เครื่อง'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','เครื่องสกัดคอนกรีต (แย็ก)','เครื่อง'], ['เครื่องมือไฟฟ้า','เครื่องมือ','แท่นตัดไฟเบอร์','เครื่อง'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','รอกปากบ่อ','ชุด'], ['เครื่องมือไฟฟ้า','เครื่องมือ','ชุดเครื่องมือประจำทีม','ชุด'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','แป้นตั้งนั่งร้าน','ชุด'], ['เครื่องมือไฟฟ้า','เครื่องมือ','มือเสือ','อัน'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','ป้อคำยัน','อัน'], ['เครื่องมือไฟฟ้า','เครื่องมือ','เครื่องปั่นไฟเบนซิน (เล็ก)','เครื่อง'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','เครื่องปั่นไฟ 24 KVA','เครื่อง'], ['เครื่องมือไฟฟ้า','เครื่องมือ','เครื่องปั่นไฟ 50 KVA','เครื่อง'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','เครื่องปั่นไฟ 400 KVA','เครื่อง'], ['เครื่องมือไฟฟ้า','เครื่องมือ','เครื่องคอริ่ง Hilti D200','เครื่อง'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','ปั๊มน้ำ 1 นิ้ว','เครื่อง'], ['เครื่องมือไฟฟ้า','เครื่องมือ','ปั๊มน้ำ 2 นิ้ว','เครื่อง'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','ปั๊มน้ำ 3 นิ้ว','เครื่อง'], ['เครื่องมือไฟฟ้า','เครื่องมือ','ปั๊มน้ำ 6 นิ้ว','เครื่อง'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','ตู้เชื่อมมือถือ','ตู้'], ['เครื่องมือไฟฟ้า','เครื่องมือ','สว่านโรตารี่เจาะปูน','ตัว'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','สว่านเจาะเหล็ก','ตัว'], ['เครื่องมือไฟฟ้า','เครื่องมือ','หินเจียร 4 นิ้ว','ตัว'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','หินเจียร 7 นิ้ว','ตัว'], ['เครื่องมือไฟฟ้า','เครื่องมือ','เลื่อยวงเดือน 4 นิ้ว','ตัว'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','เลื่อยจิ๊กซอ','ตัว'], ['เครื่องมือไฟฟ้า','เครื่องมือ','เลื่อยตัดไฟฟ้า (ตัดท่อ)','ตัว'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','เครื่องเกลาท่อปูน','เครื่อง'], ['เครื่องมือไฟฟ้า','เครื่องมือ','เครื่องโม่ปูน','เครื่อง'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','เครื่องจี้ปูน','เครื่อง'], ['เครื่องมือไฟฟ้า','เครื่องมือ','เครื่องจี้ปูนไฟฟ้า','เครื่อง'],
+    ['เครื่องมือไฟฟ้า','เครื่องมือ','ชุดถังลม+ชุดตัดแก๊ส','ชุด'],
+    // อุปกรณ์สิ้นเปลือง
+    ['อุปกรณ์สิ้นเปลือง','วัสดุ','ใบตัดเหล็ก 4 นิ้ว','ใบ'], ['อุปกรณ์สิ้นเปลือง','วัสดุ','ใบเลื่อยตัดท่อ','ใบ'],
+    ['อุปกรณ์สิ้นเปลือง','วัสดุ','ใบวงเดือน','ใบ'], ['อุปกรณ์สิ้นเปลือง','วัสดุ','ลวดเชื่อม 3.2mm','กก.'],
+    ['อุปกรณ์สิ้นเปลือง','วัสดุ','ลวดเชื่อม 1.6mm','กก.'], ['อุปกรณ์สิ้นเปลือง','วัสดุ','พุกฮิลติ','ตัว'],
+    ['อุปกรณ์สิ้นเปลือง','วัสดุ','ดอกสว่านเจาะปูน 9"','ดอก'], ['อุปกรณ์สิ้นเปลือง','วัสดุ','ดอกสว่านเจาะปูน 12"','ดอก'],
+    ['อุปกรณ์สิ้นเปลือง','วัสดุ','ดอกสว่านเจาะปูน 16"','ดอก'], ['อุปกรณ์สิ้นเปลือง','วัสดุ','ดอกสว่านเจาะปูน 20"','ดอก'],
+    ['อุปกรณ์สิ้นเปลือง','วัสดุ','ดอกสว่านเจาะเหล็ก 6"','ดอก'], ['อุปกรณ์สิ้นเปลือง','วัสดุ','ดอกสว่านเจาะเหล็ก 8"','ดอก'],
+    ['อุปกรณ์สิ้นเปลือง','วัสดุ','ดอกสว่านเจาะเหล็ก 10"','ดอก'], ['อุปกรณ์สิ้นเปลือง','วัสดุ','โพลิเมอร์','ถุง'],
+    ['อุปกรณ์สิ้นเปลือง','วัสดุ','คอมปาวด์','กระป๋อง'], ['อุปกรณ์สิ้นเปลือง','วัสดุ','เบนโทไนท์','ถุง'],
+    ['อุปกรณ์สิ้นเปลือง','วัสดุ','Co-Contact Cleaner','กระป๋อง'], ['อุปกรณ์สิ้นเปลือง','วัสดุ','ถ่าน C','ก้อน'],
+    ['อุปกรณ์สิ้นเปลือง','วัสดุ','น้ำมันเอนกประสงค์ Sonek','กระป๋อง'],
   ];
-  const item_catalog = itemSeed.map(r=>({ id:genId(), division_id:r[0], kind:r[1], name:r[2], unit:r[3], code:'', active:true, created_at:new Date().toISOString() }));
+  // ชื่อเฉพาะที่ seed อื่นในไฟล์นี้ยังอ้างถึง (dailyTasksSeed/requisitions ด้านล่าง) — คงไว้ให้ครบตามเดิม
+  const LEGACY_ITEMS = { pjcm:[['เครื่องจักรหนัก/รถเช่า','รถ','รถเครน 10 ตัน','คัน']], en:[['เครื่องจักรหนัก/รถเช่า','รถ','รถกระเช้า 12 เมตร','คัน']], pc:[['เครื่องจักรหนัก/รถเช่า','รถ','รถโม่ปูน','คัน']] };
+  const item_catalog = [];
+  ['pjcm','en','pc'].forEach(div=>{
+    CMT01_ITEMS.concat(LEGACY_ITEMS[div]).forEach(r=>item_catalog.push(
+      { id:genId(), division_id:div, category:r[0], kind:r[1], name:r[2], unit:r[3], code:'', active:true, created_at:new Date().toISOString() }));
+  });
   const findItem = (div,name) => item_catalog.find(i=>i.division_id===div && i.name===name);
 
   const dailyTasksSeed = [
@@ -2178,24 +2241,35 @@ async function renderOpsToday(D){
 }
 
 /* ---------- ส่งแผนพรุ่งนี้ (รออนุมัติ) ---------- */
+// checklist ยานพาหนะ/เครื่องจักรหนักในแผนงาน (อ้างอิงฟอร์มกระดาษ "แผนปฏิบัติงานรายวัน") — ใช้ CSS .req-* ร่วมกับ checklist เบิกของ
+function planVehicleChecklistHtml(items){
+  if(!items.length) return '<div class="empty" style="padding:16px">ยังไม่มีรายการเครื่องจักรหนัก/รถเช่าในคลัง — เพิ่มที่แท็บ "คลังไอเทม"</div>';
+  return '<div class="req-check" style="max-height:280px">'+items.map(i=>
+    '<label class="req-row" style="grid-template-columns:18px 1fr 130px"><input type="checkbox" class="veh-chk" data-name="'+esc(i.name)+'" onchange="toggleReqRow(this)">'+
+    '<span class="req-name">'+esc(i.name)+'</span>'+
+    '<input type="text" class="req-asset veh-detail" placeholder="ทะเบียน/จำนวน/หัวสกัด" disabled onclick="event.stopPropagation()">'+
+    '</label>'
+  ).join('')+'</div>';
+}
 async function renderOpsSubmit(D){
   const body = document.getElementById('opsBody'); if(!body) return;
   const mob = isMobileMode();
-  const { data: items } = await sb.from('item_catalog').select('*').eq('division_id',state.ws).eq('kind','รถ').eq('active',true).order('name');
+  const { data: items } = await sb.from('item_catalog').select('*').eq('division_id',state.ws).eq('category','เครื่องจักรหนัก/รถเช่า').eq('active',true).order('name');
+  state.cache.planVehItems = items||[];
   const teamOpts = (state.cache.teams||[]).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
   const projOpts = state.projects.filter(p=>p.division_id===state.ws).map(p=>'<option value="'+p.id+'">'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
-  const vehOpts = '<option value="">— ไม่ใช้รถ —</option>'+(items||[]).map(i=>'<option value="'+i.id+'">'+esc(i.name)+'</option>').join('');
   body.innerHTML = '<div class="card" style="'+(mob?'':'max-width:640px')+'"><div class="card-t" style="margin-bottom:14px">ส่งแผนงานวันพรุ่งนี้ (รอ PM อนุมัติ)</div>'+
     '<div class="row r2"><div class="field"><label>ทีม</label><select id="sp_team">'+(teamOpts||'<option value="">— ยังไม่มีทีม —</option>')+'</select></div>'+
     '<div class="field"><label>กะ</label><select id="sp_shift"><option>กลางวัน</option><option>กลางคืน</option></select></div></div>'+
     '<div class="field"><label>โครงการ</label><select id="sp_proj">'+projOpts+'</select></div>'+
     '<div class="field"><label>วันที่ปฏิบัติงาน</label><input id="sp_date" type="date" value="'+ymdOffset(1)+'"></div>'+
     '<div class="field"><label>งานที่จะทำ</label><input id="sp_task" placeholder="เช่น ลงท่อ + กลบบ่อ"></div>'+
-    '<div class="field"><label>ตำแหน่งงาน (ถนน/บ่อพัก)</label><input id="sp_loc" placeholder="เช่น ถนนสาธิต MH.03 → MH.04"></div>'+
+    '<div class="field"><label>ตำแหน่งงาน (ถนน/ซอย)</label><input id="sp_loc" placeholder="เช่น แยกเกียกกาย"></div>'+
+    '<div class="field"><label>ตำแหน่งลงงาน (บ่อ)</label><input id="sp_manhole" placeholder="เช่น MH.TH02 → MH.TH03"></div>'+
     '<div class="row r3"><div class="field"><label>ระยะ (วัน)</label><input id="sp_dur" type="number" value="1"></div>'+
     '<div class="field"><label>คนงานชาย</label><input id="sp_male" type="number" value="0"></div>'+
     '<div class="field"><label>คนงานหญิง</label><input id="sp_female" type="number" value="0"></div></div>'+
-    '<div class="field"><label>รถที่ใช้</label><select id="sp_veh">'+vehOpts+'</select></div>'+
+    '<div class="field"><label>ยานพาหนะ/เครื่องจักรหนักที่ขอเช่า (ติ๊กแล้วกรอกทะเบียน/จำนวน)</label>'+planVehicleChecklistHtml(state.cache.planVehItems)+'</div>'+
     '<button class="btn btn-primary '+(mob?'touch-lg btn-block':'')+'" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="saveSubmitPlan()">ส่งแผนรออนุมัติ</button>'+
     '</div>';
 }
@@ -2203,10 +2277,13 @@ async function saveSubmitPlan(){
   const g=k=>(document.getElementById(k)||{}).value;
   const task = g('sp_task').trim();
   if(!task){ toast('กรอกงานที่จะทำ','err'); return; }
+  const vehicleDetail = Array.from(document.querySelectorAll('.veh-chk:checked')).map(cb=>
+    ({ name: cb.dataset.name, detail: cb.closest('.req-row').querySelector('.veh-detail').value.trim() }));
+  const locDetail = g('sp_loc') + (g('sp_manhole') ? (g('sp_loc')?' · ':'')+'บ่อ '+g('sp_manhole') : '');
   const { data:{ user } } = await sb.auth.getUser();
   const rec = { division_id:state.ws, plan_date:g('sp_date'), start_date:g('sp_date'), team_id:g('sp_team')||null, project_id:g('sp_proj')||null,
-    task, shift:g('sp_shift'), location_detail:g('sp_loc'), duration:+g('sp_dur')||1, pct:0,
-    headcount_male:+g('sp_male')||0, headcount_female:+g('sp_female')||0, vehicle_item_id:g('sp_veh')||null,
+    task, shift:g('sp_shift'), location_detail:locDetail, duration:+g('sp_dur')||1, pct:0,
+    headcount_male:+g('sp_male')||0, headcount_female:+g('sp_female')||0, vehicle_detail:vehicleDetail,
     status:'รออนุมัติ', created_by:user.id };
   const { error } = await sb.from('daily_plan').insert(rec);
   if(error){ toast(error.message,'err'); return; }
@@ -2236,11 +2313,12 @@ async function renderOpsReq(D){
       '<button class="btn btn-ghost '+(mob?'touch-lg':'btn-sm')+'" onclick="setReqStatus(\''+r.id+'\',\'ปฏิเสธ\')">ปฏิเสธ</button>' : '')+
     (canReturn ? '<button class="btn btn-ghost '+(mob?'touch-lg':'btn-sm')+'" onclick="openReturnItem(\''+r.id+'\')">↩️ คืนของ</button>' : '');
   };
+  const itemLabel = r => esc(r.item) + (r.qty && +r.qty!==1 ? ' × '+fmt(r.qty) : '') + (r.asset_no ? ' <span style="color:var(--muted2);font-weight:500">· เบอร์ '+esc(r.asset_no)+'</span>' : '');
   if(mob){
     body.innerHTML = kpiRow + rows.map(r=>{ const proj=state.projects.find(p=>p.id===r.project_id);
       return '<div class="mc">'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px">'+
-          '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;color:var(--ink)">'+(REQ_KIND_ICON[r.kind]||'')+' '+esc(r.item)+'</div>'+
+          '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;color:var(--ink)">'+(REQ_KIND_ICON[r.kind]||'')+' '+itemLabel(r)+'</div>'+
           '<div style="font-size:11.5px;color:var(--muted2);margin-top:2px">'+esc(proj?proj.code:'-')+' · '+thDate(r.when_date)+'</div></div>'+
           reqStatusPill(r.status)+'</div>'+
         (r.reason?'<div style="font-size:12px;color:var(--ink2);margin:6px 0 10px">เหตุผล: '+esc(r.reason)+'</div>':'<div style="height:6px"></div>')+
@@ -2254,23 +2332,46 @@ async function renderOpsReq(D){
     '<div class="table-wrap" style="border:none;border-radius:0"><table><thead><tr><th>วันที่</th><th>โครงการ</th><th>ประเภท</th><th>รายการ</th><th>เหตุผล</th><th>สถานะ</th><th></th></tr></thead><tbody>'+
     rows.map(r=>{ const proj=state.projects.find(p=>p.id===r.project_id);
       return '<tr><td>'+thDate(r.when_date)+'</td><td>'+esc(proj?proj.code:'-')+'</td>'+
-      '<td>'+(REQ_KIND_ICON[r.kind]||'')+' '+esc(r.kind)+'</td><td>'+esc(r.item)+'</td><td>'+esc(r.reason||'-')+'</td>'+
+      '<td>'+(REQ_KIND_ICON[r.kind]||'')+' '+esc(r.kind)+'</td><td>'+itemLabel(r)+'</td><td>'+esc(r.reason||'-')+'</td>'+
       '<td>'+reqStatusPill(r.status)+'</td>'+
       '<td>'+rowActions(r)+'</td></tr>';
     }).join('')+'</tbody></table></div></div>';
 }
+/* ---------- checklist เบิกของ (อ้างอิงฟอร์มกระดาษ CMT01) — ติ๊กได้หลายรายการในใบเดียว
+   แต่ละรายการมีจำนวน+เบอร์/ทะเบียนของตัวเอง แล้ว insert เป็นหลายแถวพร้อมกันตอนกด "ส่งคำขอ" ---------- */
+const REQ_CAT_ORDER = ['เครื่องจักรหนัก/รถเช่า','เครื่องมือไฟฟ้า','อุปกรณ์สิ้นเปลือง'];
+function toggleReqRow(cb){
+  const row = cb.closest('.req-row'); if(!row) return;
+  row.classList.toggle('on', cb.checked);
+  row.querySelectorAll('.req-qty,.req-asset').forEach(el=>{ el.disabled = !cb.checked; });
+}
+function requisitionChecklistHtml(){
+  const items = state.cache.reqItems||[];
+  if(!items.length) return '<div class="empty" style="padding:16px">ยังไม่มีไอเทมในคลังของฝ่ายนี้ — เพิ่มที่แท็บ "คลังไอเทม" ก่อน</div>';
+  const byCat = {}; items.forEach(i=>{ const c=i.category||'อื่นๆ'; (byCat[c]=byCat[c]||[]).push(i); });
+  const cats = REQ_CAT_ORDER.filter(c=>byCat[c]).concat(Object.keys(byCat).filter(c=>!REQ_CAT_ORDER.includes(c)));
+  return '<div class="req-check">'+cats.map(cat=>
+    '<div class="req-cat-sect">'+esc(cat)+'</div>'+
+    byCat[cat].map(i=>
+      '<label class="req-row"><input type="checkbox" class="req-chk" data-item-id="'+i.id+'" onchange="toggleReqRow(this)">'+
+      '<span class="req-name">'+(REQ_KIND_ICON[i.kind]||'')+' '+esc(i.name)+(i.unit?' <span class="req-unit">('+esc(i.unit)+')</span>':'')+'</span>'+
+      '<input type="number" class="req-qty" data-item-id="'+i.id+'" value="1" min="0.01" step="0.01" disabled onclick="event.stopPropagation()" title="จำนวน">'+
+      '<input type="text" class="req-asset" data-item-id="'+i.id+'" placeholder="เบอร์/ทะเบียน" disabled onclick="event.stopPropagation()">'+
+      '</label>'
+    ).join('')
+  ).join('')+'</div>';
+}
 function requisitionFieldsHtml(){
   const projOpts = state.projects.filter(p=>p.division_id===state.ws).map(p=>'<option value="'+p.id+'">'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
   const teamOpts = (state.cache.teams||[]).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
-  return '<div class="field"><label>โครงการ</label><select id="rq_proj">'+projOpts+'</select></div>'+
-    '<div class="row r2"><div class="field"><label>ประเภท</label><select id="rq_kind" onchange="refreshReqItemOptions()"><option>วัสดุ</option><option>เครื่องมือ</option><option>รถ</option></select></div>'+
+  return '<div class="row r2"><div class="field"><label>โครงการ</label><select id="rq_proj">'+projOpts+'</select></div>'+
     '<div class="field"><label>ทีม</label><select id="rq_team">'+(teamOpts||'<option value="">— ไม่ระบุ —</option>')+'</select></div></div>'+
-    '<div class="field"><label>รายการที่ขอเบิก</label><select id="rq_item"></select></div>'+
-    '<div class="field"><label>เหตุผล</label><input id="rq_reason" placeholder="เช่น ยกท่อลงบ่อ MH.03"></div>'+
-    '<div class="row r2"><div class="field"><label>วันที่ต้องการใช้</label><input id="rq_when" type="date"></div><div class="field"><label>รายละเอียดเพิ่มเติม</label><input id="rq_detail"></div></div>';
+    '<div class="row r2"><div class="field"><label>วันที่ต้องการใช้</label><input id="rq_when" type="date"></div>'+
+    '<div class="field"><label>เหตุผล/งานที่ใช้</label><input id="rq_reason" placeholder="เช่น ยกท่อลงบ่อ MH.03"></div></div>'+
+    '<div class="field"><label>เลือกรายการที่ต้องการเบิก (ติ๊กแล้วกรอกจำนวน/เบอร์)</label>'+requisitionChecklistHtml()+'</div>';
 }
 async function openRequisition(){
-  const { data: items } = await sb.from('item_catalog').select('*').eq('division_id',state.ws).eq('active',true).order('name');
+  const { data: items } = await sb.from('item_catalog').select('*').eq('division_id',state.ws).eq('active',true).order('category').order('name');
   state.cache.reqItems = items||[];
   const body = requisitionFieldsHtml();
   if(isMobileMode()){
@@ -2279,33 +2380,32 @@ async function openRequisition(){
       '<button class="btn btn-primary touch-lg" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveRequisition()">ส่งคำขอ</button>'));
   } else {
     document.getElementById('modalHost').innerHTML =
-      '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
+      '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:640px">'+
       '<div class="modal-head"><span class="t">📋 ขอเบิกของ/รถ/เครื่องมือ</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
       '<div class="modal-body">'+body+
       '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
         '<button class="btn btn-primary" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveRequisition()">ส่งคำขอ</button></div></div></div>';
   }
   document.getElementById('rq_when').value = new Date().toISOString().slice(0,10);
-  refreshReqItemOptions();
-}
-function refreshReqItemOptions(){
-  const kind = (document.getElementById('rq_kind')||{}).value || 'วัสดุ';
-  const sel = document.getElementById('rq_item'); if(!sel) return;
-  const items = (state.cache.reqItems||[]).filter(i=>i.kind===kind);
-  sel.innerHTML = items.length ? items.map(i=>'<option value="'+i.id+'">'+esc(i.name)+(i.unit?' ('+esc(i.unit)+')':'')+'</option>').join('')
-    : '<option value="">— ไม่มีไอเทมประเภทนี้ในคลัง เพิ่มที่แท็บ "คลังไอเทม" ก่อน —</option>';
 }
 async function saveRequisition(){
   const g=k=>(document.getElementById(k)||{}).value;
-  const itemId = g('rq_item');
-  if(!itemId){ toast('เลือกรายการที่ขอเบิก (หรือเพิ่มไอเทมในคลังก่อน)','err'); return; }
-  const item = (state.cache.reqItems||[]).find(i=>i.id===itemId);
+  const projId = g('rq_proj'), teamId = g('rq_team')||null, reason = g('rq_reason'), when = g('rq_when');
+  const checked = Array.from(document.querySelectorAll('.req-chk:checked'));
+  if(!checked.length){ toast('ติ๊กอย่างน้อย 1 รายการที่ต้องการเบิก','err'); return; }
   const { data:{ user } } = await sb.auth.getUser();
-  const rec = { project_id:g('rq_proj'), division_id:state.ws, team_id:g('rq_team')||null, kind:g('rq_kind'),
-    item_id:itemId, item: item?item.name:'', reason:g('rq_reason'), detail:g('rq_detail'), when_date:g('rq_when'), created_by:user.id };
-  const { error } = await sb.from('requisitions').insert(rec);
+  const recs = checked.map(cb=>{
+    const id = cb.dataset.itemId;
+    const item = (state.cache.reqItems||[]).find(i=>i.id===id) || {};
+    const qtyEl = document.querySelector('.req-qty[data-item-id="'+id+'"]');
+    const assetEl = document.querySelector('.req-asset[data-item-id="'+id+'"]');
+    return { project_id:projId, division_id:state.ws, team_id:teamId, kind:item.kind||'วัสดุ',
+      item_id:id, item:item.name||'', qty:+qtyEl.value||1, asset_no:assetEl.value.trim()||null,
+      reason, detail:'', when_date:when, created_by:user.id };
+  });
+  const { error } = await sb.from('requisitions').insert(recs);
   if(error){ toast(error.message,'err'); return; }
-  closeModal(); toast('ส่งคำขอเบิกเรียบร้อย รออนุมัติ','ok'); renderOpsPage(); renderMobileNav();
+  closeModal(); toast('ส่งคำขอเบิก '+recs.length+' รายการเรียบร้อย รออนุมัติ','ok'); renderOpsPage(); renderMobileNav();
 }
 async function setReqStatus(id, status){
   const rec = { status };
@@ -2341,7 +2441,7 @@ async function saveReturnItem(reqId){
 const ITEM_KIND_ICON = REQ_KIND_ICON;
 let _itemCatalogCache = [];
 async function renderOpsItems(D){
-  const { data: rows, error } = await sb.from('item_catalog').select('*').eq('division_id',state.ws).order('kind').order('name');
+  const { data: rows, error } = await sb.from('item_catalog').select('*').eq('division_id',state.ws).order('category').order('kind').order('name');
   const body = document.getElementById('opsBody'); if(!body) return;
   if(error){ body.innerHTML='<div class="card"><div class="empty">'+esc(error.message)+'<br><br>ถ้าเห็น "relation item_catalog does not exist" แปลว่ายังไม่ได้รัน schema_operations.sql</div></div>'; return; }
   const canManage = canWrite(state.ws);
@@ -2357,13 +2457,13 @@ async function renderOpsItems(D){
           '<span style="font-size:22px;line-height:1">'+(ITEM_KIND_ICON[it.kind]||'')+'</span>'+
           (it.active?'<span class="pill" style="background:var(--teal-soft);color:var(--teal)">ใช้งาน</span>':'<span class="pill" style="background:var(--soft);color:var(--muted)">ปิด</span>')+'</div>'+
         '<div style="font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.3">'+esc(it.name)+'</div>'+
-        '<div style="font-size:11px;color:var(--muted);margin-top:3px">'+esc(it.kind)+(it.unit?' · '+esc(it.unit):'')+(it.code?' · '+esc(it.code):'')+'</div>'+
+        '<div style="font-size:11px;color:var(--muted);margin-top:3px">'+esc(it.category||it.kind)+(it.unit?' · '+esc(it.unit):'')+(it.code?' · '+esc(it.code):'')+'</div>'+
       '</div>').join('')+'</div>';
     return;
   }
   body.innerHTML = newBtn+
-    '<div class="card" style="padding:0;overflow:hidden"><div class="table-wrap" style="border:none"><table><thead><tr><th>ประเภท</th><th>ชื่อ</th><th>หน่วย</th><th>รหัส</th><th>สถานะ</th><th></th></tr></thead><tbody>'+
-    rows.map(it=>'<tr><td>'+(ITEM_KIND_ICON[it.kind]||'')+' '+esc(it.kind)+'</td><td>'+esc(it.name)+'</td><td>'+esc(it.unit||'-')+'</td><td>'+esc(it.code||'-')+'</td>'+
+    '<div class="card" style="padding:0;overflow:hidden"><div class="table-wrap" style="border:none"><table><thead><tr><th>หมวดหมู่</th><th>ประเภท</th><th>ชื่อ</th><th>หน่วย</th><th>รหัส</th><th>สถานะ</th><th></th></tr></thead><tbody>'+
+    rows.map(it=>'<tr><td>'+esc(it.category||'-')+'</td><td>'+(ITEM_KIND_ICON[it.kind]||'')+' '+esc(it.kind)+'</td><td>'+esc(it.name)+'</td><td>'+esc(it.unit||'-')+'</td><td>'+esc(it.code||'-')+'</td>'+
       '<td>'+(it.active?'<span class="pill" style="background:var(--teal-soft);color:var(--teal)">ใช้งาน</span>':'<span class="pill" style="background:var(--soft);color:var(--muted)">ปิด</span>')+'</td>'+
       '<td>'+(canManage?'<button class="btn btn-ghost btn-sm" onclick="openItemById(\''+esc(it.id)+'\')">แก้ไข</button>':'')+'</td></tr>').join('')+
     '</tbody></table></div></div>';
@@ -2378,7 +2478,8 @@ function openItem(it){
     '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:420px">'+
     '<div class="modal-head"><span class="t">'+(it.id?'แก้ไขไอเทม':'เพิ่มไอเทมในคลัง')+'</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
     '<div class="modal-body">'+
-      '<div class="field"><label>ประเภท</label><select id="it_kind"><option'+(it.kind==='วัสดุ'?' selected':'')+'>วัสดุ</option><option'+(it.kind==='เครื่องมือ'?' selected':'')+'>เครื่องมือ</option><option'+(it.kind==='รถ'?' selected':'')+'>รถ</option></select></div>'+
+      '<div class="row r2"><div class="field"><label>ประเภท</label><select id="it_kind"><option'+(it.kind==='วัสดุ'?' selected':'')+'>วัสดุ</option><option'+(it.kind==='เครื่องมือ'?' selected':'')+'>เครื่องมือ</option><option'+(it.kind==='รถ'?' selected':'')+'>รถ</option></select></div>'+
+      '<div class="field"><label>หมวดหมู่ (จัดกลุ่มตอนเบิก)</label><input id="it_category" list="it_cat_opts" value="'+esc(it.category||'')+'" placeholder="เช่น เครื่องมือไฟฟ้า"><datalist id="it_cat_opts">'+REQ_CAT_ORDER.map(c=>'<option value="'+esc(c)+'">').join('')+'</datalist></div></div>'+
       '<div class="field"><label>ชื่อไอเทม</label><input id="it_name" value="'+esc(it.name||'')+'"></div>'+
       '<div class="row r2"><div class="field"><label>หน่วย</label><input id="it_unit" value="'+esc(it.unit||'')+'"></div><div class="field"><label>รหัส (ถ้ามี)</label><input id="it_code" value="'+esc(it.code||'')+'"></div></div>'+
       '<div class="field"><label>สถานะ</label><select id="it_active"><option value="true"'+(it.active!==false?' selected':'')+'>ใช้งาน</option><option value="false"'+(it.active===false?' selected':'')+'>ปิดใช้งาน</option></select></div>'+
@@ -2390,7 +2491,7 @@ async function saveItem(id){
   const g=k=>(document.getElementById(k)||{}).value;
   const name = g('it_name').trim();
   if(!name){ toast('กรอกชื่อไอเทม','err'); return; }
-  const rec = { division_id:state.ws, kind:g('it_kind'), name, unit:g('it_unit'), code:g('it_code'), active:g('it_active')==='true' };
+  const rec = { division_id:state.ws, kind:g('it_kind'), category:g('it_category').trim()||null, name, unit:g('it_unit'), code:g('it_code'), active:g('it_active')==='true' };
   const { error } = id ? await sb.from('item_catalog').update(rec).eq('id',id) : await sb.from('item_catalog').insert(rec);
   if(error){ toast(error.message,'err'); return; }
   closeModal(); toast('บันทึกเรียบร้อย','ok'); renderOpsPage();
@@ -2476,9 +2577,13 @@ async function renderOpsApprovals(D){
   const btnCls = mob ? 'touch-lg' : 'btn-sm';
   const planCards = !plans||!plans.length ? '<div class="empty">ไม่มีแผนรออนุมัติ</div>' : plans.map(pl=>{
       const proj=state.projects.find(p=>p.id===pl.project_id); const team=state.cache.teams.find(t=>t.id===pl.team_id);
+      const veh = (pl.vehicle_detail||[]);
       return (mob?'<div class="mc">':'<div style="padding:10px 0;border-bottom:1px solid #EEF1F8">')+
         '<div style="font-size:'+(mob?'14px':'12.5px')+';font-weight:600">'+esc(pl.task)+'</div>'+
-        '<div style="font-size:11.5px;color:var(--muted2);margin:2px 0 8px">'+esc(team?team.name:'-')+' · '+esc(proj?proj.code:'-')+' · '+thDate(pl.plan_date)+' · '+esc(pl.shift||'')+'</div>'+
+        '<div style="font-size:11.5px;color:var(--muted2);margin:2px 0 8px">'+esc(team?team.name:'-')+' · '+esc(proj?proj.code:'-')+' · '+thDate(pl.plan_date)+' · '+esc(pl.shift||'')+
+        (pl.location_detail?' · '+esc(pl.location_detail):'')+'</div>'+
+        (veh.length ? '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">'+veh.map(v=>
+          '<span class="pill" style="background:var(--amber-soft);color:var(--amber)">🚜 '+esc(v.name)+(v.detail?' · '+esc(v.detail):'')+'</span>').join('')+'</div>' : '')+
         '<div style="display:flex;gap:8px'+(mob?';flex-direction:column':'')+'">'+
         '<button class="btn btn-primary '+btnCls+(mob?' btn-block':'')+'" style="--acc:var(--teal);--acc2:#14b8a6" onclick="setPlanApproval(\''+pl.id+'\',\'อนุมัติ\')">อนุมัติ</button>'+
         '<button class="btn btn-ghost '+btnCls+(mob?' btn-block':'')+'" onclick="setPlanApproval(\''+pl.id+'\',\'ปฏิเสธ\')">ปฏิเสธ</button></div></div>';
