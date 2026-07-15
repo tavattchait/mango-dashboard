@@ -555,11 +555,18 @@ function buildMockDb(){
     ['en',2,'ทีม B โซลาร์','EN-2601','ติดตั้งแผงโซลาร์ 550W',4,8,40,'อนุมัติ','กลางวัน','',7,2,''],
     ['pc',3,'ทีม D โยธา/บ่อปูน','PC-2602','งานเหล็กเสริม + แบบหล่อ',-1,7,35,'อนุมัติ','กลางวัน','',5,0,'รถโม่ปูน'],
   ];
+  // หน่วยงาน/เป้าหมาย (qty_planned) ตัวอย่างต่อประเภทงาน — ใช้จำลองใบสั่งงานที่ PM เติมค่างานไว้แล้ว
+  const WO_UNIT_GUESS = task => /วางท่อ|ร้อยสาย|ท่อ/.test(task) ? ['เมตร',300] : /ปักเสา/.test(task) ? ['ต้น',20] : /แผงโซลาร์|ติดตั้งแผง/.test(task) ? ['แผง',60] : /โครงสร้าง/.test(task) ? ['ชุด',10] : /เหล็กเสริม|แบบหล่อ/.test(task) ? ['ตร.ม.',80] : ['หน่วย',100];
   const daily_plan = dailyTasksSeed.map(r=>{
     const team = teams[r[1]]; const proj = projects.find(p=>p.code===r[3]); const veh = r[13] ? findItem(r[0], r[13]) : null;
+    const approved = r[8]==='อนุมัติ';
+    const [unit, qtyPlanned] = WO_UNIT_GUESS(r[4]);
+    const qtyDone = Math.round(qtyPlanned*(r[7]/100));
     return { id:genId(), division_id:r[0], plan_date:ymdOffset(r[5]), start_date:ymdOffset(r[5]), team_id:team.id, project_id:proj?proj.id:null,
       task:r[4], duration:r[6], pct:r[7], status:r[8], shift:r[9], location_detail:r[10],
-      headcount_male:r[11], headcount_female:r[12], vehicle_item_id:veh?veh.id:null,
+      headcount_male:r[11], headcount_female:r[12], vehicle_item_id:veh?veh.id:null, vehicle_detail:[],
+      wo_code: approved?genWoCode():null, wo_status: !approved?null:(r[7]>=100?'เสร็จแล้ว':(r[7]>0?'กำลังทำ':'รอเริ่ม')),
+      qty_planned: approved?qtyPlanned:null, qty_done_total: approved?qtyDone:0, unit: approved?unit:null,
       created_by:null, approved_by:null, approved_at:null, created_at:new Date().toISOString() };
   });
 
@@ -2170,7 +2177,7 @@ async function renderOpsPage(){
   const mob = isMobileMode();
   const canLead = canApproveReq();
   const tabs = [];
-  if(canLead) tabs.push(['dash','สรุป']);
+  if(canLead) tabs.push(['dash','สรุป'],['wo','ใบสั่งงาน']);
   tabs.push(['today','งานวันนี้'],['submit','ส่งแผนพรุ่งนี้'],['req','เบิกของ'],['items','คลังไอเทม'],['reports','รายงานผล']);
   if(canLead) tabs.push(['approvals','รออนุมัติ']);
   const tabBar = mob ? '' :
@@ -2180,6 +2187,7 @@ async function renderOpsPage(){
   let html = '<div class="page'+(mob?'':' wide')+'">'+tabBar+'<div id="opsBody"></div></div>';
   content(html);
   if(state.opsTab==='dash' && canLead) await renderOpsDash(D);
+  else if(state.opsTab==='wo' && canLead) await renderOpsWO(D);
   else if(state.opsTab==='today') await renderOpsToday(D);
   else if(state.opsTab==='submit') await renderOpsSubmit(D);
   else if(state.opsTab==='req') await renderOpsReq(D);
@@ -2240,6 +2248,99 @@ async function renderOpsDash(D){
 
   html += '</div>';
   body.innerHTML = html;
+}
+
+/* ---------- ใบสั่งงาน (Work Order) — เกิดอัตโนมัติตอน PM อนุมัติแผน (ดู setPlanApproval)
+   ใช้แถว daily_plan ที่ status='อนุมัติ' เป็นใบสั่งงานโดยตรง ไม่แยกตารางใหม่ ---------- */
+function woStatusPill(s){
+  const m = { 'รอเริ่ม':{c:'var(--muted)',bg:'var(--soft)'}, 'กำลังทำ':{c:'var(--amber)',bg:'var(--amber-soft)'}, 'เสร็จแล้ว':{c:'var(--teal)',bg:'var(--teal-soft)'} }[s] || {c:'var(--muted)',bg:'var(--soft)'};
+  return '<span class="pill" style="color:'+m.c+';background:'+m.bg+'">'+esc(s||'-')+'</span>';
+}
+async function renderOpsWO(D){
+  const body = document.getElementById('opsBody'); if(!body) return;
+  const { data: rows, error } = await sb.from('daily_plan').select('*').eq('division_id',state.ws).eq('status','อนุมัติ').order('created_at',{ascending:false});
+  if(error){ body.innerHTML='<div class="card"><div class="empty">'+esc(error.message)+'</div></div>'; return; }
+  state.cache.woRows = rows||[];
+  const teamOpts = '<option value="">ทุกทีม</option>'+(state.cache.teams||[]).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
+  body.innerHTML =
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">'+
+      '<input id="wo_q" placeholder="🔍 ค้นหา WO, งาน, โครงการ..." oninput="renderWOList()" style="flex:1;min-width:200px;border:1px solid var(--line2);background:#fff;border-radius:12px;padding:9px 12px;font-size:12.5px">'+
+      '<select id="wo_teamf" onchange="renderWOList()" style="border:1px solid var(--line2);background:#fff;border-radius:12px;padding:9px 12px;font-size:12.5px">'+teamOpts+'</select>'+
+      '<select id="wo_statusf" onchange="renderWOList()" style="border:1px solid var(--line2);background:#fff;border-radius:12px;padding:9px 12px;font-size:12.5px"><option value="">ทุกสถานะ</option><option>รอเริ่ม</option><option>กำลังทำ</option><option>เสร็จแล้ว</option></select>'+
+    '</div><div id="woList"></div>';
+  renderWOList();
+}
+function renderWOList(){
+  const list = document.getElementById('woList'); if(!list) return;
+  const q = (document.getElementById('wo_q')||{}).value?.trim().toLowerCase()||'';
+  const teamF = (document.getElementById('wo_teamf')||{}).value||'';
+  const statusF = (document.getElementById('wo_statusf')||{}).value||'';
+  const D = divCfg(state.ws);
+  let rows = state.cache.woRows||[];
+  if(teamF) rows = rows.filter(r=>r.team_id===teamF);
+  if(statusF) rows = rows.filter(r=>(r.wo_status||'รอเริ่ม')===statusF);
+  if(q) rows = rows.filter(r=>{
+    const proj = state.projects.find(p=>p.id===r.project_id);
+    return (r.wo_code||'').toLowerCase().includes(q) || (r.task||'').toLowerCase().includes(q) || (proj&&(proj.code||'').toLowerCase().includes(q));
+  });
+  if(!rows.length){ list.innerHTML = '<div class="card"><div class="empty">ไม่พบใบสั่งงานที่ตรงเงื่อนไข</div></div>'; return; }
+  const canEdit = canWrite(state.ws);
+  list.innerHTML = '<div class="grid g2">'+rows.map(r=>{
+    const proj = state.projects.find(p=>p.id===r.project_id); const team = (state.cache.teams||[]).find(t=>t.id===r.team_id);
+    const pct = Math.max(0,Math.min(100,+r.pct||0));
+    return '<div class="card">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">'+
+        '<div><span class="badge" style="font-weight:700;color:'+D.acc+'">'+esc(r.wo_code||'-')+'</span> <span class="badge">'+esc(proj?proj.code:'-')+'</span></div>'+
+        woStatusPill(r.wo_status)+'</div>'+
+      '<div style="font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:4px">'+esc(r.task)+'</div>'+
+      '<div style="font-size:11.5px;color:var(--muted2);margin-bottom:10px">👷 '+esc(team?team.name:'-')+' · '+thDate(r.plan_date)+(r.location_detail?' · '+esc(r.location_detail):'')+'</div>'+
+      '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:11px;color:var(--muted)">'+(r.qty_planned?fmt(r.qty_done_total||0)+' / '+fmt(r.qty_planned)+' '+esc(r.unit||''):'ยังไม่ตั้งเป้างาน')+'</span><span style="font-size:11px;font-weight:700;color:'+D.acc+'">'+pct+'%</span></div>'+
+      '<div class="progress-bar" style="margin-bottom:12px"><div style="width:'+pct+'%;background:'+D.acc+'"></div></div>'+
+      '<div style="display:flex;gap:8px">'+
+        (canEdit ? '<button class="btn btn-ghost btn-sm" onclick="openWOEdit(\''+r.id+'\')">✎ เติมค่างาน</button>' : '')+
+        '<button class="btn btn-ghost btn-sm" onclick="openWOHistory(\''+r.id+'\')">📊 ประวัติความคืบหน้า</button>'+
+      '</div></div>';
+  }).join('')+'</div>';
+}
+function openWOEdit(id){
+  const wo = (state.cache.woRows||[]).find(w=>w.id===id); if(!wo) return;
+  const teamOpts = (state.cache.teams||[]).map(t=>'<option value="'+t.id+'"'+(wo.team_id===t.id?' selected':'')+'>'+esc(t.name)+'</option>').join('');
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:420px">'+
+    '<div class="modal-head"><span class="t">✎ เติมค่างาน — '+esc(wo.wo_code||'')+'</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body">'+
+      '<div class="field"><label>งาน</label><div style="font-size:13px;color:var(--ink2);padding:6px 0">'+esc(wo.task)+'</div></div>'+
+      '<div class="row r2"><div class="field"><label>ค่างานเป้าหมาย (qty)</label><input id="wo_qty" type="number" step="0.01" value="'+(wo.qty_planned||'')+'"></div>'+
+      '<div class="field"><label>หน่วย</label><input id="wo_unit" value="'+esc(wo.unit||'')+'" placeholder="เช่น เมตร, ต้น, แผง"></div></div>'+
+      '<div class="field"><label>ทีมที่รับผิดชอบ</label><select id="wo_team">'+teamOpts+'</select></div>'+
+      '<div class="field"><label>สถานะใบสั่งงาน</label><select id="wo_status_sel"><option'+(wo.wo_status==='รอเริ่ม'?' selected':'')+'>รอเริ่ม</option><option'+(wo.wo_status==='กำลังทำ'?' selected':'')+'>กำลังทำ</option><option'+(wo.wo_status==='เสร็จแล้ว'?' selected':'')+'>เสร็จแล้ว</option></select></div>'+
+    '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn btn-primary" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveWOEdit(\''+id+'\')">บันทึก</button></div></div></div>';
+}
+async function saveWOEdit(id){
+  const g=k=>(document.getElementById(k)||{}).value;
+  const rec = { qty_planned: g('wo_qty')?+g('wo_qty'):null, unit: g('wo_unit')||null, team_id: g('wo_team')||null, wo_status: g('wo_status_sel') };
+  const { error } = await sb.from('daily_plan').update(rec).eq('id', id);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('บันทึกใบสั่งงานเรียบร้อย','ok'); renderOpsWO(divCfg(state.ws));
+}
+async function openWOHistory(id){
+  const wo = (state.cache.woRows||[]).find(w=>w.id===id); if(!wo) return;
+  const { data: reports } = await sb.from('field_reports').select('*').eq('daily_plan_id',id).order('submitted_at',{ascending:false});
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
+    '<div class="modal-head"><span class="t">📊 ประวัติความคืบหน้า — '+esc(wo.wo_code||'')+'</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body">'+
+      '<div style="font-size:12.5px;color:var(--ink2);margin-bottom:14px">'+esc(wo.task)+' — สะสม '+fmt(wo.qty_done_total||0)+(wo.qty_planned?' / '+fmt(wo.qty_planned):'')+' '+esc(wo.unit||'')+' ('+Math.round(wo.pct||0)+'%)</div>'+
+      (!reports||!reports.length ? '<div class="empty">ยังไม่มีรายงานผลสำหรับใบสั่งงานนี้</div>' :
+      '<div style="display:flex;flex-direction:column;gap:10px">'+reports.map(r=>
+        '<div style="padding:10px 12px;background:var(--soft);border-radius:12px">'+
+        '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><b style="font-size:12.5px">+'+fmt(r.qty_done)+' '+esc(r.unit||wo.unit||'')+'</b><span style="font-size:11px;color:var(--muted2)">'+esc((r.submitted_at||'').replace('T',' ').slice(0,16))+'</span></div>'+
+        (r.detail?'<div style="font-size:11.5px;color:var(--ink2)">'+esc(r.detail)+'</div>':'')+
+        (r.problem?'<div style="font-size:11.5px;color:var(--red);margin-top:2px">⚠️ '+esc(r.problem)+'</div>':'')+
+        '</div>'
+      ).join('')+'</div>')+
+    '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ปิด</button></div></div></div>';
 }
 
 /* ---------- งานวันนี้ ---------- */
@@ -2664,12 +2765,17 @@ async function renderOpsApprovals(D){
     '<div class="card"><div class="card-t" style="margin-bottom:10px">คำขอเบิกรออนุมัติ ('+(reqs||[]).length+')</div>'+reqCards+'</div>'+
     '</div>';
 }
+// สร้างรหัสใบสั่งงานสั้นๆ อ่านง่าย (ไม่ชนกันในทางปฏิบัติ ไม่ต้อง query นับลำดับ)
+function genWoCode(){ return 'WO-'+Math.random().toString(36).slice(2,7).toUpperCase(); }
 async function setPlanApproval(id, status){
   const rec = { status };
-  if(status==='อนุมัติ'){ rec.approved_by = (await sb.auth.getUser()).data.user.id; rec.approved_at = new Date().toISOString(); }
+  if(status==='อนุมัติ'){
+    rec.approved_by = (await sb.auth.getUser()).data.user.id; rec.approved_at = new Date().toISOString();
+    rec.wo_code = genWoCode(); rec.wo_status = 'รอเริ่ม'; // อนุมัติแผน = สร้างใบสั่งงานอัตโนมัติ (ตามสเปค FieldSync)
+  }
   const { error } = await sb.from('daily_plan').update(rec).eq('id', id);
   if(error){ toast(error.message,'err'); return; }
-  toast(status+'เรียบร้อย','ok'); renderOpsApprovals(divCfg(state.ws));
+  toast(status+'เรียบร้อย'+(rec.wo_code?' — สร้างใบสั่งงาน '+rec.wo_code:''),'ok'); renderOpsApprovals(divCfg(state.ws));
 }
 
 /* ---------- photo picker (ใช้ร่วม desktop+mobile: ถ่ายรูป/เลือกจากคลัง + preview + ลบได้) ----------
@@ -2727,27 +2833,36 @@ async function uploadPhotos(pathPrefix, onProgress){
 /* ============================================================
  * FIELD REPORTS — รายงานผลหลังทำงานจริง (พร้อมรูป) เปิดจากปุ่มในหน้า Plan/Day หรือแท็บปฏิบัติงาน
  * ============================================================ */
-function fieldReportFieldsHtml(projectId, teamId, needPicker){
+function fieldReportFieldsHtml(projectId, teamId, needPicker, plan){
   const projOpts = state.projects.filter(p=>p.division_id===state.ws).map(p=>'<option value="'+p.id+'"'+(p.id===projectId?' selected':'')+'>'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
   const teamOpts = (state.cache.teams||[]).map(t=>'<option value="'+t.id+'"'+(t.id===teamId?' selected':'')+'>'+esc(t.name)+'</option>').join('');
-  return (needPicker ? '<div class="row r2"><div class="field"><label>โครงการ</label><select id="fr_proj">'+projOpts+'</select></div><div class="field"><label>ทีม</label><select id="fr_team">'+(teamOpts||'<option value="">-</option>')+'</select></div></div>' : '')+
+  // เมื่อรายงานผลผูกกับใบสั่งงาน (WO) อยู่แล้ว — โชว์บริบท (สถานที่/เป้าหมาย) แทนการให้กรอกซ้ำ ตามสเปค auto-fill ของ FieldSync
+  const ctx = plan ? '<div style="padding:10px 12px;background:var(--soft);border-radius:12px;margin-bottom:14px;font-size:12px;color:var(--ink2);line-height:1.6">'+
+      (plan.wo_code?'<b>'+esc(plan.wo_code)+'</b>':'')+(plan.location_detail?' · 📍 '+esc(plan.location_detail):'')+
+      (plan.qty_planned?'<br>เป้าหมาย: ทำไปแล้ว '+fmt(plan.qty_done_total||0)+' / '+fmt(plan.qty_planned)+' '+esc(plan.unit||''):'')+
+    '</div>' : '';
+  const defaultTotal = plan ? ((+plan.headcount_male||0)+(+plan.headcount_female||0)) : 0;
+  return ctx +
+    (needPicker ? '<div class="row r2"><div class="field"><label>โครงการ</label><select id="fr_proj">'+projOpts+'</select></div><div class="field"><label>ทีม</label><select id="fr_team">'+(teamOpts||'<option value="">-</option>')+'</select></div></div>' : '')+
     '<div class="row r2"><div class="field"><label>เวลาเริ่ม</label><input id="fr_start" type="time"></div><div class="field"><label>เวลาเลิก</label><input id="fr_end" type="time"></div></div>'+
     '<div class="row r3"><div class="field"><label>คนงาน (คน)</label><input id="fr_labor" type="number" value="0"></div>'+
     '<div class="field"><label>ผู้ควบคุมงาน (คน)</label><input id="fr_supervise" type="number" value="0"></div>'+
-    '<div class="field"><label>รวมทั้งหมด (คน)</label><input id="fr_total" type="number" value="0"></div></div>'+
+    '<div class="field"><label>รวมทั้งหมด (คน)</label><input id="fr_total" type="number" value="'+defaultTotal+'"></div></div>'+
     '<div class="row r2"><div class="field"><label>สภาพอากาศ</label><select id="fr_weather"><option>แจ่มใส</option><option>ฝนตก</option><option>ฝนตกบางช่วง</option><option>เมฆมาก</option></select></div>'+
     '<div class="field"><label>ปริมาณงานที่ทำได้</label><input id="fr_qty" type="number" step="0.01"></div></div>'+
-    '<div class="field"><label>หน่วย</label><input id="fr_unit" placeholder="เช่น เมตร, บ่อ"></div>'+
+    '<div class="field"><label>หน่วย</label><input id="fr_unit" value="'+esc((plan&&plan.unit)||'')+'" placeholder="เช่น เมตร, บ่อ"></div>'+
     '<div class="field"><label>รายละเอียด</label><textarea id="fr_detail" rows="2"></textarea></div>'+
     '<div class="field"><label>ปัญหาที่พบ (ถ้ามี)</label><textarea id="fr_problem" rows="2"></textarea></div>'+
     '<div class="row r2"><div class="field"><label>ความรุนแรง</label><select id="fr_severity"><option value="">— ไม่มีปัญหา —</option><option>น้อย</option><option>ปานกลาง</option><option>มาก</option></select></div>'+
     '<div class="field"><label>ต้องการความช่วยเหลือ</label><input id="fr_help"></div></div>'+
     photoPickerHtml();
 }
-function openFieldReport(dailyPlanId, projectId, teamId){
+async function openFieldReport(dailyPlanId, projectId, teamId){
   _photoFiles = [];
+  let plan = null;
+  if(dailyPlanId){ const { data } = await sb.from('daily_plan').select('*').eq('id',dailyPlanId).single(); plan = data; }
   const needPicker = !dailyPlanId;
-  const body = fieldReportFieldsHtml(projectId, teamId, needPicker);
+  const body = fieldReportFieldsHtml(projectId, teamId, needPicker, plan);
   const saveOnclick = "saveFieldReport('"+(dailyPlanId||'')+"','"+(projectId||'')+"','"+(teamId||'')+"')";
   if(isMobileMode()){
     hideMobileNav();
@@ -2781,6 +2896,19 @@ async function saveFieldReport(dailyPlanId, projectId, teamId){
       photos: photoUrls, submitted_by: user.id, submitted_at: new Date().toISOString() };
     const { error } = await sb.from('field_reports').insert(rec);
     if(error){ toast(error.message,'err'); return; }
+    // รายงานผลผูกกับใบสั่งงาน (WO) → สะสมค่างาน + อัปเดต % อัตโนมัติ (ตามสเปค FieldSync: "ระบบอัปเดต % WO อัตโนมัติ")
+    if(dailyPlanId){
+      const { data: plan } = await sb.from('daily_plan').select('qty_planned,qty_done_total').eq('id',dailyPlanId).single();
+      if(plan){
+        const newTotal = (+plan.qty_done_total||0) + (+g('fr_qty')||0);
+        const upd = { qty_done_total: newTotal };
+        if(plan.qty_planned>0){
+          const newPct = Math.min(100, Math.round(newTotal/plan.qty_planned*100));
+          upd.pct = newPct; upd.wo_status = newPct>=100?'เสร็จแล้ว':(newPct>0?'กำลังทำ':'รอเริ่ม');
+        }
+        await sb.from('daily_plan').update(upd).eq('id',dailyPlanId);
+      }
+    }
     toast('บันทึกรายงานผลเรียบร้อย','ok');
     _photoFiles = [];
     if(isMobileMode()){ renderOpsPage(); renderMobileNav(); }
