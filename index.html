@@ -99,18 +99,22 @@ button{cursor:pointer}
 .ws-tile.active .lbl{color:var(--tc,var(--teal))}
 .sb-bottom{display:flex;flex-direction:column;align-items:center;gap:12px}
 
-/* Mango-style module launcher (หน้า "เมนู") */
-.launch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px}
-.launch-tile{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px 12px 18px;cursor:pointer;
-  display:flex;flex-direction:column;align-items:center;gap:10px;box-shadow:0 1px 2px rgba(16,24,40,.03);
-  transition:border-color .15s,box-shadow .15s,transform .08s;font-family:inherit}
-.launch-tile:hover{border-color:var(--tc,var(--indigo));box-shadow:0 6px 18px -10px rgba(16,24,40,.3)}
-.launch-tile:active{transform:translateY(1px)}
-.launch-tile .lt-icon{width:54px;height:54px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:27px}
+/* Mango-style module launcher (หน้า "เมนู") — จัดกึ่งกลางเป็นบล็อกกะทัดรัด ไม่ยืดเต็มจอกว้าง */
+.launcher-wrap{max-width:1020px;margin:0 auto;padding-top:4px}
+.launcher-head{text-align:center;margin-bottom:6px}
+.launcher-head .t{font-family:var(--disp);font-size:27px;font-weight:700;color:var(--ink);letter-spacing:-.3px}
+.launcher-head .s{font-size:13px;color:var(--muted);margin-top:5px}
+.launch-sect{display:flex;align-items:center;justify-content:center;gap:9px;margin:34px 0 16px;font-size:13px;font-weight:700;color:var(--ink2)}
+.launch-sect .ic{width:26px;height:26px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.launch-sect .cnt{font-size:10.5px;font-weight:600;color:var(--muted);background:var(--soft);padding:2px 10px;border-radius:999px;font-family:var(--mono)}
+.launch-grid{display:grid;grid-template-columns:repeat(auto-fit,148px);gap:16px;justify-content:center}
+.launch-tile{background:#fff;border:1px solid var(--line);border-radius:20px;padding:24px 14px 20px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(16,24,40,.05);
+  transition:transform .16s cubic-bezier(.2,.8,.3,1),border-color .16s,box-shadow .16s;font-family:inherit}
+.launch-tile:hover{border-color:var(--tc,var(--indigo));box-shadow:0 14px 28px -14px rgba(16,24,40,.4);transform:translateY(-4px)}
+.launch-tile:active{transform:translateY(-1px)}
+.launch-tile .lt-icon{width:58px;height:58px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:27px}
 .launch-tile .lt-name{font-size:13px;font-weight:600;color:var(--ink);text-align:center;line-height:1.3}
-.launch-sect{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;
-  font-family:var(--mono);margin:22px 2px 10px;display:flex;align-items:center;gap:10px}
-.launch-sect::after{content:"";flex:1;height:1px;background:var(--line2)}
 .sb-gear{width:46px;height:46px;border-radius:var(--r);border:1px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px}
 .sb-gear:hover{border-color:#C7CDD6}
 .sb-avatar{width:38px;height:38px;border-radius:var(--r);background:var(--indigo);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12.5px;color:#fff;cursor:pointer}
@@ -1377,6 +1381,10 @@ function launcherTile(ws, sub, icon, name, acc, soft){
     '<div class="lt-icon" style="background:'+soft+';color:'+acc+'">'+licon(icon)+'</div>'+
     '<div class="lt-name">'+esc(name)+'</div></button>';
 }
+function launchSectHtml(icon, name, acc, soft, count){
+  return '<div class="launch-sect"><span class="ic" style="background:'+(soft||'var(--soft)')+';color:'+(acc||'var(--ink2)')+'">'+icon+'</span>'+
+    '<span>'+esc(name)+'</span>'+(count!=null?'<span class="cnt">'+count+' โครงการ</span>':'')+'</div>';
+}
 async function renderLauncher(){
   const p = state.profile, role = p.role, isAdmin = role==='admin';
   await loadAllProjects(); // ให้ตัวเลขโครงการในหัวข้อฝ่ายถูกต้อง
@@ -1385,14 +1393,14 @@ async function renderLauncher(){
   const canOps = isAdmin||['pm','manager','eng','field'].includes(role);
   const canCost = isAdmin||['pm','manager','accountant'].includes(role);
 
-  let html = '<div class="page">'+
-    '<div style="margin-bottom:4px"><div style="font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-.2px">เมนูหลัก</div>'+
-    '<div style="font-size:12.5px;color:var(--muted)">เลือกส่วนงานที่ต้องการ — กดครั้งเดียวถึงเลย</div></div>';
+  let html = '<div class="page"><div class="launcher-wrap">'+
+    '<div class="launcher-head"><div class="t">เมนูหลัก</div>'+
+    '<div class="s">เลือกส่วนงานที่ต้องการ — กดครั้งเดียวถึงเลย</div></div>';
 
   divs.forEach(d=>{
     const D = divCfg(d.id);
     const nProj = state.projects.filter(x=>x.division_id===d.id).length;
-    html += '<div class="launch-sect">'+D.icon+' '+esc(d.name)+' · '+nProj+' โครงการ</div><div class="launch-grid">'+
+    html += launchSectHtml(D.icon, d.name, D.acc, D.soft, nProj)+'<div class="launch-grid">'+
       launcherTile(d.id,'overview','bar-chart','ภาพรวมฝ่าย',D.acc,D.soft)+
       launcherTile(d.id,'projects','folder','โครงการ',D.acc,D.soft)+
       (canOps ? launcherTile(d.id,'plan','calendar','วางแผน',D.acc,D.soft)+
@@ -1402,7 +1410,7 @@ async function renderLauncher(){
     '</div>';
   });
 
-  html += '<div class="launch-sect">🏢 องค์กร</div><div class="launch-grid">'+
+  html += launchSectHtml('🏢','องค์กร',CO_CFG.acc,CO_CFG.soft)+'<div class="launch-grid">'+
     launcherTile('company','overview','grid','ภาพรวมองค์กร',CO_CFG.acc,CO_CFG.soft)+
     launcherTile('company','divisions','layers','เทียบฝ่าย',CO_CFG.acc,CO_CFG.soft)+
     launcherTile('company','finance','dollar-sign','การเงินรวม',CO_CFG.acc,CO_CFG.soft)+
@@ -1410,13 +1418,13 @@ async function renderLauncher(){
   '</div>';
 
   if(isAdmin){
-    html += '<div class="launch-sect">⚙️ การจัดการระบบ</div><div class="launch-grid">'+
+    html += launchSectHtml('⚙️','การจัดการระบบ','#334156','var(--soft)')+'<div class="launch-grid">'+
       launcherTile('company','users','user-check','ผู้ใช้งาน','#334156','var(--soft)')+
       launcherTile('company','targets','target','เป้าหมายบริษัท','#334156','var(--soft)')+
       launcherTile('company','audit','clipboard','ประวัติการใช้งาน','#334156','var(--soft)')+
     '</div>';
   }
-  html += '</div>';
+  html += '</div></div>';
   content(html);
 }
 
