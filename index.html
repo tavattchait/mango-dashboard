@@ -1123,13 +1123,13 @@ function sumDivision(projRows, monthRows, divId, month){
  * COMPANY: OVERVIEW
  * ============================================================ */
 /* ---------- roll-up "วันนี้จากหน้างาน": รวมรายงานผล/คำขอเบิก/แผนที่ field ส่งเข้ามาวันนี้ ทุกฝ่ายในจอเดียว ---------- */
-async function fetchFieldPulseToday(){
+async function fetchFieldPulseToday(divisionId){
   const today = new Date().toISOString().slice(0,10);
-  const [{data:reports},{data:reqs},{data:plans}] = await Promise.all([
-    sb.from('field_reports').select('*').gte('submitted_at', today),
-    sb.from('requisitions').select('*').gte('created_at', today),
-    sb.from('daily_plan').select('*').eq('status','รออนุมัติ').gte('created_at', today),
-  ]);
+  let rq = sb.from('field_reports').select('*').gte('submitted_at', today);
+  let qq = sb.from('requisitions').select('*').gte('created_at', today);
+  let pq = sb.from('daily_plan').select('*').eq('status','รออนุมัติ').gte('created_at', today);
+  if(divisionId){ rq = rq.eq('division_id',divisionId); qq = qq.eq('division_id',divisionId); pq = pq.eq('division_id',divisionId); }
+  const [{data:reports},{data:reqs},{data:plans}] = await Promise.all([rq, qq, pq]);
   return { reports: reports||[], reqs: reqs||[], plans: plans||[] };
 }
 function renderFieldPulseCard(pulse, projects){
@@ -2168,15 +2168,19 @@ async function renderOpsPage(){
   state.cache.teams = teams||[];
   if(!state.opsTab) state.opsTab = 'today';
   const mob = isMobileMode();
-  const tabs = [['today','งานวันนี้'],['submit','ส่งแผนพรุ่งนี้'],['req','เบิกของ'],['items','คลังไอเทม'],['reports','รายงานผล']];
-  if(canApproveReq()) tabs.push(['approvals','รออนุมัติ']);
+  const canLead = canApproveReq();
+  const tabs = [];
+  if(canLead) tabs.push(['dash','สรุป']);
+  tabs.push(['today','งานวันนี้'],['submit','ส่งแผนพรุ่งนี้'],['req','เบิกของ'],['items','คลังไอเทม'],['reports','รายงานผล']);
+  if(canLead) tabs.push(['approvals','รออนุมัติ']);
   const tabBar = mob ? '' :
     '<div style="display:flex;background:#fff;border:1px solid var(--line);border-radius:16px;padding:3px;margin-bottom:14px;flex-wrap:wrap;gap:2px">'+
     tabs.map(t=>'<button onclick="switchOpsTab(\''+t[0]+'\')" style="padding:7px 16px;border:none;border-radius:12px;font-family:inherit;font-size:12px;font-weight:'+(state.opsTab===t[0]?600:500)+';cursor:pointer;background:'+(state.opsTab===t[0]?D.acc:'transparent')+';color:'+(state.opsTab===t[0]?'#fff':'#5B6B84')+'">'+t[1]+'</button>').join('')+
     '</div>';
   let html = '<div class="page'+(mob?'':' wide')+'">'+tabBar+'<div id="opsBody"></div></div>';
   content(html);
-  if(state.opsTab==='today') await renderOpsToday(D);
+  if(state.opsTab==='dash' && canLead) await renderOpsDash(D);
+  else if(state.opsTab==='today') await renderOpsToday(D);
   else if(state.opsTab==='submit') await renderOpsSubmit(D);
   else if(state.opsTab==='req') await renderOpsReq(D);
   else if(state.opsTab==='items') await renderOpsItems(D);
@@ -2184,6 +2188,59 @@ async function renderOpsPage(){
   else if(state.opsTab==='approvals') await renderOpsApprovals(D);
 }
 function switchOpsTab(t){ state.opsTab=t; renderOpsPage(); renderMobileNav(); }
+
+/* ---------- สรุป (dashboard ฝ่ายปฏิบัติ) — มุมมองรวมสำหรับหัวหน้าทีม/PM เห็นภาพฝ่ายเดียวในจอเดียว
+   ต่างจาก "วันนี้จากหน้างาน" ใน company overview ตรงที่โฟกัสเฉพาะฝ่ายนี้ + เพิ่มของที่เบิกออกยังไม่คืน ---------- */
+async function renderOpsDash(D){
+  const body = document.getElementById('opsBody'); if(!body) return;
+  const projIds = state.projects.filter(p=>p.division_id===state.ws).map(p=>p.id);
+  const todayD = new Date(); todayD.setHours(0,0,0,0); const today = ymd(todayD);
+  const [{data:plansToday},{data:heldRows},pulse] = await Promise.all([
+    sb.from('daily_plan').select('*').eq('division_id',state.ws).eq('status','อนุมัติ').gte('start_date', ymd(addDays(todayD,-60))).lte('start_date', today),
+    sb.from('requisitions').select('*').in('project_id', projIds.length?projIds:['00000000-0000-0000-0000-000000000000']).eq('status','อนุมัติ').in('kind',['รถ','เครื่องมือ']),
+    fetchFieldPulseToday(state.ws),
+  ]);
+  const activeToday = (plansToday||[]).filter(r=>{ const s=new Date(r.start_date+'T00:00:00'); return addDays(s, Math.max(1,+r.duration||1)-1) >= todayD; });
+  const teamsWorkingIds = new Set(activeToday.map(r=>r.team_id).filter(Boolean));
+  const totalTeams = (state.cache.teams||[]).length;
+  const held = (heldRows||[]).filter(r=>!r.returned_at);
+  const { data: allReqs } = await sb.from('requisitions').select('*').in('project_id', projIds.length?projIds:['00000000-0000-0000-0000-000000000000']).eq('status','รออนุมัติ');
+  const { data: allPlansPending } = await sb.from('daily_plan').select('*').eq('division_id',state.ws).eq('status','รออนุมัติ');
+
+  const stat = (n,label,color,ic) => '<div class="kpi"><div class="top"><div class="ic" style="background:'+color+'22">'+ic+'</div></div><div class="lb">'+esc(label)+'</div><div class="vl tnum">'+n+'</div></div>';
+  let html = '<div class="grid g4" style="margin-bottom:14px">'+
+    stat(teamsWorkingIds.size+' / '+totalTeams,'ทีมทำงานวันนี้',D.acc,'👷')+
+    stat(held.length,'ของเบิกออกยังไม่คืน',D.acc,'🚜')+
+    stat((allReqs||[]).length+(allPlansPending||[]).length,'รออนุมัติทั้งหมด',D.acc,'⏳')+
+    stat(pulse.reports.length,'รายงานผลส่งวันนี้',D.acc,'📝')+
+  '</div>';
+
+  html += '<div class="grid" style="grid-template-columns:1.3fr 1fr;align-items:start">';
+
+  html += '<div class="card"><div class="card-t" style="margin-bottom:2px">ของที่เบิกออกอยู่ — ยังไม่คืน ('+held.length+')</div>'+
+    '<div class="card-sub" style="margin-bottom:12px">รถ/เครื่องมือที่อนุมัติแล้วแต่ยังไม่บันทึกคืน</div>'+
+    (!held.length ? '<div class="empty">ไม่มีของค้างคืนตอนนี้</div>' : held.slice(0,10).map(r=>{ const proj=state.projects.find(p=>p.id===r.project_id);
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #F1F3F9">'+
+        '<span style="font-size:16px">'+(REQ_KIND_ICON[r.kind]||'')+'</span>'+
+        '<div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600;color:var(--ink)">'+esc(r.item)+(r.asset_no?' · เบอร์ '+esc(r.asset_no):'')+'</div>'+
+        '<div style="font-size:11px;color:var(--muted2)">'+esc(proj?proj.code:'-')+' · เบิกเมื่อ '+thDate(r.when_date)+'</div></div>'+
+        (canApproveReq() ? '<button class="btn btn-ghost btn-sm" onclick="openReturnItem(\''+r.id+'\')">↩️ คืนของ</button>' : '')+
+      '</div>';
+    }).join(''))+
+  '</div>';
+
+  html += '<div class="card"><div class="card-t" style="margin-bottom:12px">ต้องอนุมัติวันนี้</div>'+
+    '<div style="display:flex;flex-direction:column;gap:10px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--soft);border-radius:12px">'+
+      '<span style="font-size:12.5px;color:var(--ink2)">แผนงานรออนุมัติ</span><span style="font-family:var(--disp);font-weight:700;color:'+D.acc+'">'+(allPlansPending||[]).length+'</span></div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--soft);border-radius:12px">'+
+      '<span style="font-size:12.5px;color:var(--ink2)">คำขอเบิกรออนุมัติ</span><span style="font-family:var(--disp);font-weight:700;color:'+D.acc+'">'+(allReqs||[]).length+'</span></div>'+
+    (canApproveReq() ? '<button class="btn btn-primary btn-sm" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="switchOpsTab(\'approvals\')">ไปหน้าอนุมัติ →</button>' : '')+
+    '</div></div>';
+
+  html += '</div>';
+  body.innerHTML = html;
+}
 
 /* ---------- งานวันนี้ ---------- */
 async function renderOpsToday(D){
