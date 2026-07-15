@@ -447,9 +447,12 @@ function buildMockDb(){
     for(let m=3;m>=0;m--){
       const frac = Math.max(0.15, 1-m*0.28);
       const conActual = Math.round(p.total_amt*frac*0.22);
+      const costActual = Math.round(conActual*0.66);
       project_monthly.push({ id:genId(), project_id:p.id, month:ymOffset(m),
         con_plan:Math.round(conActual*1.08), con_should:Math.round(conActual*1.03), con_actual:conActual, con_status:'ตามแผน',
-        cost_budget:Math.round(p.total_amt*0.75), cost_should:Math.round(conActual*0.68), cost_actual:Math.round(conActual*0.66), cost_status:'ปกติ',
+        cost_budget:Math.round(p.total_amt*0.75), cost_should:Math.round(conActual*0.68), cost_actual:costActual, cost_status:'ปกติ',
+        cost_material_plan:Math.round(costActual*1.05*0.62), cost_material_should:Math.round(costActual*0.98*0.62), cost_material_actual:Math.round(costActual*0.62),
+        cost_labor_plan:Math.round(costActual*1.05*0.38), cost_labor_should:Math.round(costActual*0.98*0.38), cost_labor_actual:Math.round(costActual*0.38),
         submit_due:null, submit_actual:null, bill_plan:conActual, bill_actual:Math.round(conActual*0.95), bill_due:null, bill_actual_date:null, note:'' });
     }
   });
@@ -1577,7 +1580,7 @@ async function renderProjectDetail(projId){
     '<div style="flex:1"><div style="display:flex;align-items:center;gap:9px;margin-bottom:3px"><span class="badge">'+esc(p.code)+'</span>'+statusPill(p.status)+'</div>'+
     '<div style="font-size:20px;font-weight:700;color:var(--ink);line-height:1.2;letter-spacing:-.2px">'+esc(p.name)+'</div>'+
     '<div style="display:flex;gap:16px;margin-top:7px;font-size:12px;color:var(--muted);flex-wrap:wrap"><span>📍 '+esc(p.location||'-')+'</span><span>🏢 '+esc(p.client||'-')+'</span><span>👤 '+esc(p.pm||'-')+'</span></div></div>'+
-    (editable ? '<button class="btn btn-primary btn-sm" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="openMonthlyEntry(\''+p.id+'\')">รายงานความคืบหน้า</button>'+
+    (editable ? '<button class="btn btn-primary btn-sm" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="projTab(\'overview\')">รายงานความคืบหน้า</button>'+
       '<button class="btn btn-ghost btn-sm" onclick=\'openProject('+JSON.stringify(p)+')\'>แก้ไข</button>' : '')+
     '</div>'+
     '<div class="grid g4" style="margin-bottom:14px">'+
@@ -1873,15 +1876,9 @@ function projTab(tab){
   if(tab==='wbs'){
     host.innerHTML = renderProjectWBS(c, p, D, editable);
   } else if(tab==='overview'){
-    host.innerHTML = !c.months.length ?
-      '<div class="empty">ยังไม่มีการรายงานความคืบหน้า'+(editable?'<br><br><button class="btn btn-primary" style="--acc:var(--teal);--acc2:#14b8a6" onclick="openMonthlyEntry(\''+p.id+'\')">📝 เริ่มรายงาน</button>':'')+'</div>' :
-      '<div class="table-wrap"><table><thead><tr><th>เดือน</th><th class="num">ค่างานแผน</th><th class="num">ได้จริง</th>'+
-      '<th class="num">ต้นทุนแผน</th><th class="num">ใช้จริง</th><th class="num">วางบิลแผน</th><th class="num">วางบิลจริง</th><th>สถานะ</th></tr></thead><tbody>'+
-      c.months.map(r=>'<tr><td>'+thMonth(r.month)+'</td>'+
-        '<td class="num tnum">'+fmt(r.con_plan)+'</td><td class="num tnum">'+fmt(r.con_actual)+'</td>'+
-        '<td class="num tnum">'+fmt(r.cost_budget)+'</td><td class="num tnum">'+fmt(r.cost_actual)+'</td>'+
-        '<td class="num tnum">'+fmt(r.bill_plan)+'</td><td class="num tnum">'+fmt(r.bill_actual)+'</td>'+
-        '<td>'+(r.con_status?esc(r.con_status):'-')+'</td></tr>').join('')+'</tbody></table></div>';
+    host.innerHTML = (editable ? '<div style="margin-bottom:12px"><button class="btn btn-primary btn-sm" style="--acc:var(--teal);--acc2:#14b8a6" onclick="openAddMonthRow()">+ เพิ่มเดือน</button>'+
+      (c.months.length ? ' <span style="font-size:11px;color:var(--muted2);margin-left:6px">พิมพ์ตรง cell ได้เลย · Tab/Enter เลื่อนช่อง · กด ⋯ ที่แถวเพื่อกรอกวันส่งงาน/วางบิล/หมายเหตุ</span>' : '')+'</div>' : '')+
+      projMonthlyGridHtml(c.months, editable);
   } else if(tab==='fin'){
     host.innerHTML = (editable?'<div style="margin-bottom:12px"><button class="btn btn-primary btn-sm" style="--acc:var(--teal);--acc2:#14b8a6" onclick="openFinancialEntry(\''+p.id+'\')">+ บันทึกข้อมูลการเงิน</button></div>':'')+
       (!c.fin.length ? '<div class="empty">ยังไม่มีข้อมูลการเงิน</div>' :
@@ -3195,116 +3192,115 @@ async function importMangoSelected(){
  * ============================================================ */
 function fld(id,label,type){ type=type||'number';
   return '<div class="field"><label>'+esc(label)+'</label><input id="'+id+'" type="'+type+'" '+
-    (type==='number'?'step="0.01" oninput="liveCheck()"':'')+'><div class="inline-warn" id="'+id+'_w"></div></div>';
+    (type==='number'?'step="0.01"':'')+'><div class="inline-warn" id="'+id+'_w"></div></div>';
 }
-async function openMonthlyEntry(projId){
-  const { data: p } = await sb.from('projects').select('*').eq('id', projId).single();
-  const nowYM = currentMonth();
-  const { data: ex } = await sb.from('project_monthly').select('*').eq('project_id', projId).eq('month', nowYM).maybeSingle();
-  const e = ex || {};
-  document.getElementById('modalHost').innerHTML =
-    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:640px">'+
-    '<div class="modal-head"><span class="t">📝 รายงานความคืบหน้า · '+esc(p.name)+'</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
-    '<div class="modal-body">'+
-      '<div class="field"><label>เดือน</label><input id="me_month" type="month" value="'+nowYM+'" onchange="reloadMonthlyEntry(\''+projId+'\')"></div>'+
-      '<div class="form-section"><div class="form-section-t">① ค่างานก่อสร้าง</div><div class="row r3">'+
-        fld('me_conPlan','แผน (บาท)')+ fld('me_conShould','ควรได้')+ fld('me_conActual','ได้จริง')+
-      '</div><div class="field" style="margin-top:10px"><label>สถานะ</label><input id="me_conStatus" type="text"></div></div>'+
-      '<div class="form-section"><div class="form-section-t">② ต้นทุน</div><div class="row r3">'+
-        fld('me_budget','Budget')+ fld('me_costShould','ควรใช้')+ fld('me_costActual','ใช้จริง')+
-      '</div><div class="field" style="margin-top:10px"><label>สถานะต้นทุน</label><input id="me_costStatus" type="text"></div></div>'+
-      '<div class="form-section"><div class="form-section-t">③ วันที่ส่งงาน</div><div class="row r2">'+
-        fld('me_dueSubmit','กำหนดส่งงาน','date')+ fld('me_actualSubmit','ส่งงานจริง','date')+
-      '</div></div>'+
-      '<div class="form-section"><div class="form-section-t">④ แผนวางบิล</div><div class="row r2">'+
-        fld('me_billPlan','แผนวางบิล')+ fld('me_billActual','วางบิลจริง')+
-      '</div></div>'+
-      '<div class="form-section"><div class="form-section-t">⑤ วันที่วางบิล</div><div class="row r2">'+
-        fld('me_billDue','กำหนดวางบิล','date')+ fld('me_billActualDate','วางบิลจริง (วันที่)','date')+
-      '</div></div>'+
-      '<div class="field"><label>หมายเหตุ</label><textarea id="me_note" rows="2"></textarea></div>'+
-    '</div>'+
-    '<div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
-      '<button class="btn btn-primary" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveMonthlyEntry(\''+projId+'\')">💾 บันทึก</button></div>'+
-    '</div></div>';
-  fillMonthlyForm(e);
+/* ---------- ตารางรายเดือนแบบ Excel (แทน modal เดิม) — พิมพ์ตรง cell, Tab/Enter เลื่อน เหมือน WBS ---------- */
+function projMonthlyGridHtml(months, editable){
+  if(!months.length) return '<div class="card"><div class="empty">ยังไม่มีการรายงานความคืบหน้า'+(editable?' — กด "+ เพิ่มเดือน" เพื่อเริ่มต้น':'')+'</div></div>';
+  const cell = (id,field,val,ph) => editable
+    ? '<input type="number" class="wbs-in tnum" data-id="'+id+'" data-f="'+field+'" value="'+(val||0)+'" step="0.01" onkeydown="pmCellKey(event,this)" onblur="pmCellSave(this)">'
+    : '<span class="tnum">'+fmt(val)+'</span>';
+  const rows = months.map(r=>{
+    const diffPlan = (+r.con_plan||0) - (+r.con_actual||0);
+    const diffPlanPct = r.con_plan>0 ? (diffPlan/r.con_plan*100) : 0;
+    const diffShould = (+r.con_should||0) - (+r.con_actual||0);
+    const diffShouldPct = r.con_should>0 ? (diffShould/r.con_should*100) : 0;
+    return '<tr>'+
+      '<td style="white-space:nowrap;font-weight:600;padding:8px 10px">'+thMonth(r.month)+
+        (editable?' <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:10px" onclick="openMonthlyExtra(\''+r.id+'\')" title="รายละเอียดเพิ่มเติม (วันส่งงาน/วางบิล/หมายเหตุ)">⋯</button>':'')+'</td>'+
+      '<td class="num">'+cell(r.id,'con_plan',r.con_plan)+'</td>'+
+      '<td class="num">'+cell(r.id,'con_should',r.con_should)+'</td>'+
+      '<td class="num">'+cell(r.id,'con_actual',r.con_actual)+'</td>'+
+      '<td class="num tnum" style="color:var(--muted)">'+fmt(diffPlan)+'</td>'+
+      '<td class="num tnum" style="color:var(--muted)">'+diffPlanPct.toFixed(0)+'%</td>'+
+      '<td class="num tnum" style="color:var(--muted)">'+fmt(diffShould)+'</td>'+
+      '<td class="num tnum" style="color:var(--muted)">'+diffShouldPct.toFixed(0)+'%</td>'+
+      '<td class="num">'+cell(r.id,'cost_material_plan',r.cost_material_plan)+'</td>'+
+      '<td class="num">'+cell(r.id,'cost_material_should',r.cost_material_should)+'</td>'+
+      '<td class="num">'+cell(r.id,'cost_material_actual',r.cost_material_actual)+'</td>'+
+      '<td class="num">'+cell(r.id,'cost_labor_plan',r.cost_labor_plan)+'</td>'+
+      '<td class="num">'+cell(r.id,'cost_labor_should',r.cost_labor_should)+'</td>'+
+      '<td class="num">'+cell(r.id,'cost_labor_actual',r.cost_labor_actual)+'</td>'+
+      '<td class="num">'+cell(r.id,'bill_plan',r.bill_plan)+'</td>'+
+      '<td class="num">'+cell(r.id,'bill_actual',r.bill_actual)+'</td>'+
+      (editable?'<td class="num"><button class="btn btn-ghost btn-sm" onclick="deleteMonthlyRow(\''+r.id+'\')">🗑</button></td>':'')+
+    '</tr>';
+  }).join('');
+  return '<div class="table-wrap wbs-table" style="overflow-x:auto"><table><thead>'+
+    '<tr><th rowspan="2">เดือน</th><th colspan="3">มูลค่างานก่อสร้าง</th><th colspan="2">ส่วนต่างจากแผนงาน</th><th colspan="2">ส่วนต่างจากควรก่อสร้างได้</th>'+
+    '<th colspan="3">ค่าวัสดุ</th><th colspan="3">ค่าแรง (WRC)</th><th colspan="2">วางบิล</th>'+(editable?'<th rowspan="2"></th>':'')+'</tr>'+
+    '<tr><th>แผนงาน</th><th>ควรได้</th><th>จริง</th><th>บาท</th><th>%</th><th>บาท</th><th>%</th>'+
+    '<th>Plan</th><th>ควรใช้</th><th>ใช้จริง</th><th>Plan</th><th>ควรใช้</th><th>ใช้จริง</th><th>แผน</th><th>จริง</th></tr>'+
+    '</thead><tbody id="pmGridBody">'+rows+'</tbody></table></div>';
 }
-function fillMonthlyForm(e){
-  const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=(v==null?'':v); };
-  set('me_conPlan',e.con_plan); set('me_conShould',e.con_should); set('me_conActual',e.con_actual); set('me_conStatus',e.con_status);
-  set('me_budget',e.cost_budget); set('me_costShould',e.cost_should); set('me_costActual',e.cost_actual); set('me_costStatus',e.cost_status);
-  set('me_dueSubmit',e.submit_due); set('me_actualSubmit',e.submit_actual);
-  set('me_billPlan',e.bill_plan); set('me_billActual',e.bill_actual);
-  set('me_billDue',e.bill_due); set('me_billActualDate',e.bill_actual_date);
-  set('me_note',e.note);
-  liveCheck();
-}
-async function reloadMonthlyEntry(projId){
-  const month = document.getElementById('me_month').value;
-  const { data: ex } = await sb.from('project_monthly').select('*').eq('project_id', projId).eq('month', month).maybeSingle();
-  fillMonthlyForm(ex||{});
-}
-function liveCheck(){
-  const g=id=>parseFloat((document.getElementById(id)||{}).value)||0;
-  const chk=(id,cond,msg)=>{ const el=document.getElementById(id), w=document.getElementById(id+'_w'); if(!el||!w)return;
-    el.classList.toggle('warn',cond); w.style.display=cond?'block':'none'; w.textContent=msg; };
-  chk('me_billActual', g('me_billPlan')>0 && g('me_billActual')>g('me_billPlan'), '⚠ วางบิลจริงเกินแผน — ต้องระบุเหตุผลก่อนบันทึก');
-  chk('me_costActual', g('me_budget')>0 && g('me_costActual')>g('me_budget'), '⚠ ใช้จริงเกิน Budget');
-  chk('me_conActual', g('me_conPlan')>0 && g('me_conActual')>g('me_conPlan'), '⚠ ได้จริงเกินค่างานแผน');
-}
-function collectMonthly(projId){
-  const g=id=>(document.getElementById(id)||{}).value;
-  return { project_id:projId, month:g('me_month'),
-    con_plan:+g('me_conPlan')||0, con_should:+g('me_conShould')||0, con_actual:+g('me_conActual')||0, con_status:g('me_conStatus'),
-    cost_budget:+g('me_budget')||0, cost_should:+g('me_costShould')||0, cost_actual:+g('me_costActual')||0, cost_status:g('me_costStatus'),
-    submit_due:g('me_dueSubmit')||null, submit_actual:g('me_actualSubmit')||null,
-    bill_plan:+g('me_billPlan')||0, bill_actual:+g('me_billActual')||0,
-    bill_due:g('me_billDue')||null, bill_actual_date:g('me_billActualDate')||null,
-    note:g('me_note') };
-}
-function validateEntry(en){
-  const w=[];
-  if(en.bill_plan>0 && en.bill_actual>en.bill_plan)
-    w.push({level:'block',msg:'วางบิลจริง '+fmt(en.bill_actual)+' เกินแผนวางบิล '+fmt(en.bill_plan)+' — ต้องระบุเหตุผลก่อนบันทึก'});
-  if(en.cost_budget>0 && en.cost_actual>en.cost_budget)
-    w.push({level:'warn',msg:'ใช้จริง '+fmt(en.cost_actual)+' เกิน Budget '+fmt(en.cost_budget)});
-  if(en.con_plan>0 && en.con_actual>en.con_plan)
-    w.push({level:'warn',msg:'ได้จริง '+fmt(en.con_actual)+' เกินค่างานแผน '+fmt(en.con_plan)+' — โปรดตรวจสอบ'});
-  return w;
-}
-async function saveMonthlyEntry(projId, override, reason){
-  const entry = collectMonthly(projId);
-  if(!entry.month){ toast('กรุณาเลือกเดือน','err'); return; }
-  const warnings = validateEntry(entry);
-  const hasBlock = warnings.some(w=>w.level==='block');
-  if(warnings.length && !override){ showConfirm(projId, entry, warnings, hasBlock); return; }
-  if(hasBlock && !(reason||'').trim()){ toast('กรุณาระบุเหตุผล','err'); return; }
-  if(reason) entry.note = (entry.note||'') + ' [เหตุผลเกินแผน: '+reason+']';
-
-  const { data: ex } = await sb.from('project_monthly').select('id').eq('project_id',projId).eq('month',entry.month).maybeSingle();
-  let error;
-  if(ex){ ({error} = await sb.from('project_monthly').update(entry).eq('id', ex.id)); }
-  else { ({error} = await sb.from('project_monthly').insert(entry)); }
+function pmCellKey(e, el){ if(e.key==='Enter'){ e.preventDefault(); el.blur(); } }
+async function pmCellSave(el){
+  const id = el.dataset.id, f = el.dataset.f, v = +el.value||0;
+  const rec = {}; rec[f] = v;
+  const { error } = await sb.from('project_monthly').update(rec).eq('id', id);
   if(error){ toast(error.message,'err'); return; }
-  closeModal(); toast('บันทึกเรียบร้อย','ok');
-  renderProjectDetail(projId);
+  await refreshProjMonthly();
 }
-function showConfirm(projId, entry, warnings, reasonRequired){
-  state.cache.pendingEntry = entry; state.cache.pendingProj = projId; state.cache.reasonRequired = reasonRequired;
+async function refreshProjMonthly(){
+  const c = state.cache.proj; if(!c) return;
+  const { data: months } = await sb.from('project_monthly').select('*').eq('project_id', c.p.id).order('month',{ascending:false});
+  c.months = months||[];
+  if(state.projTab==='overview') projTab('overview');
+}
+function openAddMonthRow(){
   document.getElementById('modalHost').innerHTML =
-    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">'+
-    '<div class="modal-head"><span class="t">⚠️ ตรวจพบข้อมูลผิดปกติ</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
-    '<div class="modal-body"><ul class="warn-list">'+
-      warnings.map(w=>'<li class="'+w.level+'"><span>'+(w.level==='block'?'🚫':'⚠️')+'</span><span>'+esc(w.msg)+'</span></li>').join('')+
-    '</ul>'+
-    (reasonRequired?'<div class="field" style="margin-top:8px"><label>เหตุผล (จำเป็น เพราะเกินแผน)</label><textarea id="confirmReason" rows="2" placeholder="เช่น ลูกค้าขอเพิ่มงาน / VO..."></textarea></div>':'')+
-    '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
-      '<button class="btn btn-primary" style="--acc:var(--teal);--acc2:#14b8a6" onclick="confirmSaveMonthly()">ยืนยันบันทึก</button></div></div></div>';
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:340px">'+
+    '<div class="modal-head"><span class="t">+ เพิ่มเดือน</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body"><div class="field"><label>เดือน</label><input id="pm_new_month" type="month" value="'+currentMonth()+'"></div></div>'+
+    '<div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn btn-primary" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveAddMonthRow()">เพิ่ม</button></div></div></div>';
 }
-function confirmSaveMonthly(){
-  const reason = (document.getElementById('confirmReason')||{}).value || '';
-  if(state.cache.reasonRequired && !reason.trim()){ toast('กรุณาระบุเหตุผล','err'); return; }
-  saveMonthlyEntry(state.cache.pendingProj, true, reason);
+async function saveAddMonthRow(){
+  const month = (document.getElementById('pm_new_month')||{}).value;
+  if(!month){ toast('เลือกเดือน','err'); return; }
+  const c = state.cache.proj;
+  if((c.months||[]).some(r=>r.month===month)){ toast('มีข้อมูลเดือนนี้อยู่แล้ว','err'); return; }
+  const { data:{ user } } = await sb.auth.getUser();
+  const rec = { project_id:c.p.id, month, con_plan:0,con_should:0,con_actual:0,con_status:'ตามแผน',
+    cost_budget:0,cost_should:0,cost_actual:0,cost_status:'ปกติ',
+    cost_material_plan:0,cost_material_should:0,cost_material_actual:0,
+    cost_labor_plan:0,cost_labor_should:0,cost_labor_actual:0,
+    bill_plan:0,bill_actual:0, updated_by:user.id, updated_at:new Date().toISOString() };
+  const { error } = await sb.from('project_monthly').insert(rec);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('เพิ่มเดือนเรียบร้อย','ok'); await refreshProjMonthly();
+}
+async function deleteMonthlyRow(id){
+  if(!confirm('ลบข้อมูลเดือนนี้?')) return;
+  const { error } = await sb.from('project_monthly').delete().eq('id', id);
+  if(error){ toast(error.message,'err'); return; }
+  toast('ลบแล้ว','ok'); await refreshProjMonthly();
+}
+// รายละเอียดที่แก้ไม่บ่อย (วันส่งงาน/วางบิล/หมายเหตุ/สถานะ) แยกไว้ในโมดัลเล็กๆ ไม่ให้ตาราง Excel รกเกินไป
+function openMonthlyExtra(id){
+  const c = state.cache.proj; const r = (c.months||[]).find(x=>x.id===id); if(!r) return;
+  document.getElementById('modalHost').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:480px">'+
+    '<div class="modal-head"><span class="t">รายละเอียดเพิ่มเติม · '+thMonth(r.month)+'</span><button class="modal-x" onclick="closeModal()">×</button></div>'+
+    '<div class="modal-body">'+
+      '<div class="row r2"><div class="field"><label>สถานะค่างาน</label><input id="mx_conStatus" value="'+esc(r.con_status||'')+'"></div>'+
+      '<div class="field"><label>สถานะต้นทุน</label><input id="mx_costStatus" value="'+esc(r.cost_status||'')+'"></div></div>'+
+      '<div class="row r2"><div class="field"><label>กำหนดส่งงาน</label><input id="mx_subDue" type="date" value="'+esc(r.submit_due||'')+'"></div>'+
+      '<div class="field"><label>ส่งงานจริง</label><input id="mx_subActual" type="date" value="'+esc(r.submit_actual||'')+'"></div></div>'+
+      '<div class="row r2"><div class="field"><label>กำหนดวางบิล</label><input id="mx_billDue" type="date" value="'+esc(r.bill_due||'')+'"></div>'+
+      '<div class="field"><label>วางบิลจริง (วันที่)</label><input id="mx_billDate" type="date" value="'+esc(r.bill_actual_date||'')+'"></div></div>'+
+      '<div class="field"><label>หมายเหตุ</label><textarea id="mx_note" rows="3">'+esc(r.note||'')+'</textarea></div>'+
+    '</div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn btn-primary" style="--acc:var(--teal);--acc2:#14b8a6" onclick="saveMonthlyExtra(\''+id+'\')">บันทึก</button></div></div></div>';
+}
+async function saveMonthlyExtra(id){
+  const g=k=>(document.getElementById(k)||{}).value;
+  const rec = { con_status:g('mx_conStatus'), cost_status:g('mx_costStatus'),
+    submit_due:g('mx_subDue')||null, submit_actual:g('mx_subActual')||null,
+    bill_due:g('mx_billDue')||null, bill_actual_date:g('mx_billDate')||null, note:g('mx_note') };
+  const { error } = await sb.from('project_monthly').update(rec).eq('id', id);
+  if(error){ toast(error.message,'err'); return; }
+  closeModal(); toast('บันทึกเรียบร้อย','ok'); await refreshProjMonthly();
 }
 
 /* ============================================================
