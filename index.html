@@ -423,9 +423,10 @@ function genId(){ return 'demo-'+Math.random().toString(36).slice(2,10); }
 
 function buildMockDb(){
   const divisions = [
-    { id:'pjcm', name:'ฝ่ายบริหารโครงการ', tagline:'งานเดินสายไฟฟ้าบนดิน & ใต้ดิน', accent_color:'#2F6FED', sort_order:1 },
-    { id:'en', name:'ฝ่ายพลังงาน', tagline:'ระบบผลิตไฟฟ้าพลังงานแสงอาทิตย์', accent_color:'#0D9488', sort_order:2 },
-    { id:'pc', name:'ฝ่ายหล่อบ่อ', tagline:'งานคอนกรีต บ่อพัก & โครงสร้างโยธา', accent_color:'#D97706', sort_order:3 },
+    { id:'pjcm', name:'ฝ่ายบริหารโครงการ', tagline:'วางแผนโครงการ & บริหารสัญญา', accent_color:'#2F6FED', sort_order:1 },
+    { id:'pc', name:'ฝ่ายหล่อบ่อ', tagline:'งานคอนกรีต บ่อพัก & โครงสร้างโยธา', accent_color:'#D97706', sort_order:2 },
+    { id:'en', name:'ฝ่ายพลังงาน', tagline:'ระบบผลิตไฟฟ้าพลังงานแสงอาทิตย์', accent_color:'#0D9488', sort_order:3 },
+    { id:'ops', name:'ฝ่ายปฏิบัติ', tagline:'ปฏิบัติงานหน้างาน ควบคุมทีมสนามและเบิกจ่ายอุปกรณ์ (แยกจากฝ่ายบริหารโครงการ)', accent_color:'#7C3AED', sort_order:4 },
   ];
   const projectSeed = [
     ['pjcm','PJ-2601','ปรับปรุงระบบจำหน่ายไฟฟ้าแรงต่ำ ต.บางพลี','การไฟฟ้าส่วนภูมิภาค','สมุทรปราการ','อนันต์ ศรีสุข',12500000,'กำลังดำเนินการ',-60,180],
@@ -490,8 +491,8 @@ function buildMockDb(){
     return { id:genId(), project_id:proj.id, file_url:PLACEHOLDER_DOC, name:r[1], uploaded_by:null, uploaded_at:new Date().toISOString() }; });
 
   const teams = [
-    { id:genId(), division_id:'pjcm', name:'ทีม A สายใต้ดิน', members:['อนันต์ ศรีสุข','วีระ ใจดี'] },
-    { id:genId(), division_id:'pjcm', name:'ทีม C ไลน์แมน', members:['สมชาย ก้องภพ'] },
+    { id:genId(), division_id:'ops', name:'ทีม A สายใต้ดิน', members:['อนันต์ ศรีสุข','วีระ ใจดี'] },
+    { id:genId(), division_id:'ops', name:'ทีม C ไลน์แมน', members:['สมชาย ก้องภพ'] },
     { id:genId(), division_id:'en', name:'ทีม B โซลาร์', members:['วิภาดา ทองคำ','ธนา สว่างวงศ์'] },
     { id:genId(), division_id:'pc', name:'ทีม D โยธา/บ่อปูน', members:['ประเสริฐ มั่นคง'] },
   ];
@@ -542,19 +543,20 @@ function buildMockDb(){
     ['อุปกรณ์สิ้นเปลือง','วัสดุ','น้ำมันเอนกประสงค์ Sonek','กระป๋อง'],
   ];
   // ชื่อเฉพาะที่ seed อื่นในไฟล์นี้ยังอ้างถึง (dailyTasksSeed/requisitions ด้านล่าง) — คงไว้ให้ครบตามเดิม
-  const LEGACY_ITEMS = { pjcm:[['เครื่องจักรหนัก/รถเช่า','รถ','รถเครน 10 ตัน','คัน']], en:[['เครื่องจักรหนัก/รถเช่า','รถ','รถกระเช้า 12 เมตร','คัน']], pc:[['เครื่องจักรหนัก/รถเช่า','รถ','รถโม่ปูน','คัน']] };
+  // คลังไอเทมของ pjcm ย้ายไปอยู่ใต้ 'ops' แล้ว (ฝ่ายปฏิบัติแยกออกมา en/pc ยังมีคลังไอเทมของตัวเองเหมือนเดิม)
+  const LEGACY_ITEMS = { ops:[['เครื่องจักรหนัก/รถเช่า','รถ','รถเครน 10 ตัน','คัน']], en:[['เครื่องจักรหนัก/รถเช่า','รถ','รถกระเช้า 12 เมตร','คัน']], pc:[['เครื่องจักรหนัก/รถเช่า','รถ','รถโม่ปูน','คัน']] };
   const item_catalog = [];
-  ['pjcm','en','pc'].forEach(div=>{
+  ['ops','en','pc'].forEach(div=>{
     CMT01_ITEMS.concat(LEGACY_ITEMS[div]).forEach(r=>item_catalog.push(
       { id:genId(), division_id:div, category:r[0], kind:r[1], name:r[2], unit:r[3], code:'', active:true, created_at:new Date().toISOString() }));
   });
   const findItem = (div,name) => item_catalog.find(i=>i.division_id===div && i.name===name);
 
   const dailyTasksSeed = [
-    ['pjcm',0,'ทีม A สายใต้ดิน','PJ-2601','ขุดเปิด + วางท่อ HDD',-2,8,70,'อนุมัติ','กลางวัน','ถนนสาธิต MH.03 → MH.04',5,1,'รถเครน 10 ตัน'],
-    ['pjcm',0,'ทีม A สายใต้ดิน','PJ-2601','ร้อยสาย + เชื่อมต่อ',6,6,20,'อนุมัติ','กลางวัน','ถนนสาธิต MH.04 → MH.05',4,1,''],
-    ['pjcm',1,'ทีม C ไลน์แมน','PJ-2603','ปักเสาไฟฟ้า LED',-1,5,100,'อนุมัติ','กลางวัน','',6,0,''],
-    ['pjcm',1,'ทีม C ไลน์แมน','PJ-2602','สำรวจแนวเขตก่อนเดินสาย',1,2,0,'รออนุมัติ','กลางคืน','ย่านเมืองเก่า ถ.ถลาง',3,0,''],
+    ['ops',0,'ทีม A สายใต้ดิน','PJ-2601','ขุดเปิด + วางท่อ HDD',-2,8,70,'อนุมัติ','กลางวัน','ถนนสาธิต MH.03 → MH.04',5,1,'รถเครน 10 ตัน'],
+    ['ops',0,'ทีม A สายใต้ดิน','PJ-2601','ร้อยสาย + เชื่อมต่อ',6,6,20,'อนุมัติ','กลางวัน','ถนนสาธิต MH.04 → MH.05',4,1,''],
+    ['ops',1,'ทีม C ไลน์แมน','PJ-2603','ปักเสาไฟฟ้า LED',-1,5,100,'อนุมัติ','กลางวัน','',6,0,''],
+    ['ops',1,'ทีม C ไลน์แมน','PJ-2602','สำรวจแนวเขตก่อนเดินสาย',1,2,0,'รออนุมัติ','กลางคืน','ย่านเมืองเก่า ถ.ถลาง',3,0,''],
     ['en',2,'ทีม B โซลาร์','EN-2601','ติดตั้งโครงสร้างแผง',-3,7,80,'อนุมัติ','กลางวัน','',7,2,'รถกระเช้า 12 เมตร'],
     ['en',2,'ทีม B โซลาร์','EN-2601','ติดตั้งแผงโซลาร์ 550W',4,8,40,'อนุมัติ','กลางวัน','',7,2,''],
     ['pc',3,'ทีม D โยธา/บ่อปูน','PC-2602','งานเหล็กเสริม + แบบหล่อ',-1,7,35,'อนุมัติ','กลางวัน','',5,0,'รถโม่ปูน'],
@@ -608,10 +610,10 @@ function buildMockDb(){
       qty:r[4], unit_price:r[5], amount:r[4]*r[5], status:r[6], note:'', created_by:null, approved_by:null, approved_at:null, created_at:new Date().toISOString() }; });
 
   const enCraneItem = findItem('en','รถกระเช้า 12 เมตร');
-  const pjHddItem = findItem('pjcm','เครื่อง HDD เจาะดันท่อ');
+  const pjHddItem = findItem('ops','เครื่อง HDD เจาะดันท่อ');
   const requisitions = [
     { id:genId(), project_id:projects.find(p=>p.code==='EN-2601').id, division_id:'en', team_id:teams[2].id, kind:'รถ', item_id:enCraneItem?enCraneItem.id:null, item:'รถกระเช้า 12 เมตร', reason:'ยกแผงโซลาร์ขึ้นโครงสร้าง', detail:'', when_date:ymdOffset(2), status:'รออนุมัติ', created_by:null, approved_by:null, approved_at:null, returned_at:null, returned_by:null, return_note:null, created_at:new Date().toISOString() },
-    { id:genId(), project_id:projects.find(p=>p.code==='PJ-2601').id, division_id:'pjcm', team_id:teams[0].id, kind:'เครื่องมือ', item_id:pjHddItem?pjHddItem.id:null, item:'เครื่อง HDD เจาะดันท่อ', reason:'เจาะดันท่อ HDD ช่วง MH.03-04', detail:'', when_date:ymdOffset(-2), status:'อนุมัติ', created_by:null, approved_by:null, approved_at:new Date().toISOString(), returned_at:null, returned_by:null, return_note:null, created_at:new Date().toISOString() },
+    { id:genId(), project_id:projects.find(p=>p.code==='PJ-2601').id, division_id:'ops', team_id:teams[0].id, kind:'เครื่องมือ', item_id:pjHddItem?pjHddItem.id:null, item:'เครื่อง HDD เจาะดันท่อ', reason:'เจาะดันท่อ HDD ช่วง MH.03-04', detail:'', when_date:ymdOffset(-2), status:'อนุมัติ', created_by:null, approved_by:null, approved_at:new Date().toISOString(), returned_at:null, returned_by:null, return_note:null, created_at:new Date().toISOString() },
   ];
 
   const targets = [
@@ -709,8 +711,8 @@ function buildMockSupabase(){
 const sb = DEMO_MODE ? buildMockSupabase() : supabase.createClient(SUPA_URL, SUPA_KEY);
 
 const ROLE_LABEL = {admin:'ผู้ดูแลระบบ', manager:'ผู้จัดการฝ่าย', pm:'ผู้จัดการโครงการ', eng:'วิศวกรคุมงาน', field:'ทีมงานหน้างาน', accountant:'ฝ่ายบัญชี', viewer:'ผู้ดูรายงาน'};
-const DIV_ICON = {pjcm:'⚡', pc:'🧱', en:'☀️'};
-const DIV_PALETTE = { pjcm:{acc:'#2F6FED',acc2:'#1E4FC4',soft:'#EAF1FE'}, en:{acc:'#0D9488',acc2:'#0B7A6C',soft:'#E4F7F3'}, pc:{acc:'#D97706',acc2:'#B45309',soft:'#FDF1E0'} };
+const DIV_ICON = {pjcm:'⚡', pc:'🧱', en:'☀️', ops:'👷'};
+const DIV_PALETTE = { pjcm:{acc:'#2F6FED',acc2:'#1E4FC4',soft:'#EAF1FE'}, en:{acc:'#0D9488',acc2:'#0B7A6C',soft:'#E4F7F3'}, pc:{acc:'#D97706',acc2:'#B45309',soft:'#FDF1E0'}, ops:{acc:'#7C3AED',acc2:'#5B21B6',soft:'#F1EEFC'} };
 const CO_CFG = {id:'company', name:'WRC — ภาพรวมองค์กร', tagline:'ศูนย์บัญชาการทุกฝ่ายงาน', icon:'🏢', acc:'#4338CA', acc2:'#3730A3', soft:'#EBEFF8'};
 const MONTH_T = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
@@ -877,8 +879,13 @@ function subnavConfig(){
     const tabs=[['overview','ภาพรวม'],['divisions','เทียบฝ่าย'],['finance','การเงินรวม'],['activity','ความเคลื่อนไหว']];
     return tabs; // ผู้ใช้งาน/เป้าหมาย/ประวัติ ย้ายไปอยู่ในเมนูไอคอนเฟือง (⚙️) แทนแล้ว ไม่ต้องมีเป็นแท็บที่นี่
   }
+  // ฝ่ายปฏิบัติ แยกออกมาเป็น division ของตัวเอง (เดิมอยู่ใน pjcm) — ไม่มีโครงการ/วางแผน/ต้นทุนของตัวเอง
+  // มีแค่ "ปฏิบัติงาน" (hub เดิมทั้งชุด: วันนี้/ตั้งงาน/ปฏิทิน/เบิกของ/คลังไอเทม/รายงานผล/สรุป/ใบสั่งงาน/รออนุมัติ) + "ทีม"
+  if(state.ws==='ops'){ return [['ops','ปฏิบัติงาน'],['team','ทีม']]; }
   const tabs=[['overview','ภาพรวมฝ่าย'],['projects','โครงการ']];
-  if(isAdmin||['pm','manager','eng','field'].includes(role)){ tabs.push(['plan','วางแผน'],['team','ทีม'],['ops','ปฏิบัติงาน']); }
+  if(isAdmin||['pm','manager','eng','field'].includes(role)){ tabs.push(['plan','วางแผน']); }
+  // ทีม+ปฏิบัติงานของ pjcm ย้ายไปฝ่ายปฏิบัติแล้ว (ทีมงานสนามเป็น division_id='ops' ทั้งหมด) — en/pc ยังใช้แบบเดิม
+  if(state.ws!=='pjcm' && (isAdmin||['pm','manager','eng','field'].includes(role))){ tabs.push(['team','ทีม'],['ops','ปฏิบัติงาน']); }
   if(isAdmin||role==='pm'||role==='manager'||role==='accountant'){ tabs.push(['cost','ต้นทุน']); }
   return tabs;
 }
@@ -896,6 +903,8 @@ function canSubmitField(divisionId){
   return false;
 }
 function canApproveReq(){ return ['admin','pm','manager'].includes(state.profile.role); }
+// ฝ่ายปฏิบัติไม่มีโครงการเป็นของตัวเอง (แยกออกมาจาก pjcm) — ฟอร์มในฝ่ายปฏิบัติเลือกโครงการจาก pjcm แทน
+function opsProjects(){ return state.projects.filter(p=>p.division_id===(state.ws==='ops'?'pjcm':state.ws)); }
 
 /* ---------- Mobile app mode ----------
    field/eng ใช้หน้ามือถือเป็น default (เพราะเข้าทำงานจากโทรศัพท์/iPad) แต่สลับไป desktop ได้
@@ -932,7 +941,7 @@ async function backToOpsMobile(){ await renderOpsPage(); renderMobileNav(); }
 
 function toggleMenu(name){ state.openMenu = state.openMenu===name?null:name; renderShell(); }
 function closeMenu(){ state.openMenu=null; renderShell(); }
-function goWs(id){ state.ws=id; state.sub='overview'; state.selProj=null; state.searchQuery=''; go(); }
+function goWs(id){ state.ws=id; state.sub=(id==='ops'?'ops':'overview'); state.selProj=null; state.searchQuery=''; go(); }
 function goSub(id){ state.sub=id; go(); }
 // เปลี่ยน workspace+sub พร้อมกันในคลิกเดียว — ต้องใช้ตัวนี้แทนเรียก goWs()แล้วต่อด้วย goSub() เพราะสองอันนั้นแต่ละตัวเรียก go() (async) ของตัวเอง ชนกันได้ (race condition เจอบั๊กจริง)
 function goWsSub(wsId, subId){ state.ws=wsId; state.sub=subId; state.selProj=null; state.searchQuery=''; go(); }
@@ -1175,7 +1184,8 @@ async function renderCoOverview(){
   const pulse = await fetchFieldPulseToday();
   const monthly = await loadMonthlySeries(projects.map(p=>p.id), months);
   const curMonth = currentMonth(), prevMonth = months[months.length-2];
-  const divIds = state.divisions.map(d=>d.id);
+  const bizDivs = state.divisions.filter(d=>d.id!=='ops'); // ฝ่ายปฏิบัติไม่มีโครงการ/รายได้เป็นของตัวเอง ไม่รวมในสรุปการเงินรายฝ่าย
+  const divIds = bizDivs.map(d=>d.id);
   const seriesByDiv = {}; divIds.forEach(id=>{ seriesByDiv[id] = months.map(m=>sumDivision(projects, monthly, id, m).rev); });
   const curAgg = divIds.map(id=>sumDivision(projects, monthly, id, curMonth));
   const prevAgg = divIds.map(id=>sumDivision(projects, monthly, id, prevMonth));
@@ -1204,7 +1214,7 @@ async function renderCoOverview(){
     {label:'กำไรขั้นต้นเฉลี่ย', value:margin.toFixed(1)+'%', delta:(margin>=prevMargin?'▲ ':'▼ ')+Math.abs(margin-prevMargin).toFixed(1)+'%', deltaColor:margin>=prevMargin?'#0D9488':'#DC2626', bg:'var(--amber-soft)', ic:'💰', spark:svgSpark(months.slice(-8).map((m,i)=>i),'#D97706')}
   ];
 
-  const divCards = state.divisions.map((d,i)=>{
+  const divCards = bizDivs.map((d,i)=>{
     const D=divCfg(d.id); const list=projects.filter(p=>p.division_id===d.id);
     const b=list.reduce((a,p)=>a+(+p.total_amt||0),0), a2=curAgg[i];
     const progress = b>0 ? Math.round(Math.min(100,a2.rev/b*100)) : 0;
@@ -1216,7 +1226,7 @@ async function renderCoOverview(){
     '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:18px;margin-bottom:20px;animation:fadeUp .4s ease both">'+
       '<div style="flex:1;min-width:200px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span style="font-size:10px;font-weight:600;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.15em;white-space:nowrap">WRC // '+todayThaiStr()+'</span><span style="flex:1;height:1px;background:#D8DCE3"></span></div>'+
       '<div style="font-size:24px;font-weight:700;color:var(--ink);letter-spacing:-.3px">ภาพรวมองค์กร WRC</div>'+
-      '<div style="font-size:13px;color:var(--muted)">สรุปผลการดำเนินงานทั้ง '+state.divisions.length+' ฝ่ายธุรกิจ</div></div>'+
+      '<div style="font-size:13px;color:var(--muted)">สรุปผลการดำเนินงานทั้ง '+bizDivs.length+' ฝ่ายธุรกิจ</div></div>'+
       '<div class="card" style="display:flex;align-items:center;gap:16px;padding:14px 20px;flex-shrink:0">'+svgRing(healthScore,'#4338CA')+
         '<div><div style="font-size:11.5px;color:var(--muted)">ดัชนีสุขภาพองค์กร</div>'+
         '<div style="font-family:var(--disp);font-size:24px;font-weight:700;color:var(--ink)">'+healthScore+'<span style="font-size:13px;color:var(--muted2)">/100</span></div>'+
@@ -1226,7 +1236,7 @@ async function renderCoOverview(){
     '<div class="grid g4" style="margin-bottom:14px">'+kpis.map(k=>
       '<div class="kpi"><div class="top"><div class="ic" style="background:'+k.bg+'">'+k.ic+'</div>'+(k.delta?'<span class="delta" style="color:'+k.deltaColor+'">'+k.delta+'</span>':'')+'</div>'+
       '<div class="lb">'+esc(k.label)+'</div><div class="vl tnum">'+k.value+'</div><div style="margin-top:6px">'+k.spark+'</div></div>').join('')+'</div>'+
-    '<div style="font-size:13.5px;font-weight:600;color:var(--ink);margin:6px 2px 10px">'+state.divisions.length+' ฝ่ายธุรกิจ</div>'+
+    '<div style="font-size:13.5px;font-weight:600;color:var(--ink);margin:6px 2px 10px">'+bizDivs.length+' ฝ่ายธุรกิจ</div>'+
     '<div class="grid g3" style="margin-bottom:14px">'+divCards.map(c=>
       '<div class="card" style="padding:0;overflow:hidden;cursor:pointer" onclick="goWs(\''+c.d.id+'\')">'+
       '<div style="height:6px;background:'+c.D.acc+'"></div><div style="padding:16px 18px">'+
@@ -1243,8 +1253,8 @@ async function renderCoOverview(){
     '<div class="grid" style="grid-template-columns:1.9fr 1fr;align-items:stretch">'+
       '<div class="card" style="display:flex;flex-direction:column"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'+
         '<div><div class="card-t">รายได้รวมทั้งองค์กร</div><div class="card-sub">แยกตามฝ่าย · บาท · 12 เดือนล่าสุด</div></div>'+
-        '<div style="display:flex;gap:12px;font-size:11.5px">'+state.divisions.map(d=>'<span style="display:flex;align-items:center;gap:5px;color:#5B6B84"><span style="width:8px;height:8px;border-radius:16px;background:'+divCfg(d.id).acc+'"></span>'+esc(d.name)+'</span>').join('')+'</div></div>'+
-        '<div style="flex:1;display:flex;align-items:center">'+svgStackedArea(state.divisions.map(d=>({data:seriesByDiv[d.id],color:divCfg(d.id).acc})), months.map(m=>MONTH_T[+m.split('-')[1]-1]))+'</div>'+
+        '<div style="display:flex;gap:12px;font-size:11.5px">'+bizDivs.map(d=>'<span style="display:flex;align-items:center;gap:5px;color:#5B6B84"><span style="width:8px;height:8px;border-radius:16px;background:'+divCfg(d.id).acc+'"></span>'+esc(d.name)+'</span>').join('')+'</div></div>'+
+        '<div style="flex:1;display:flex;align-items:center">'+svgStackedArea(bizDivs.map(d=>({data:seriesByDiv[d.id],color:divCfg(d.id).acc})), months.map(m=>MONTH_T[+m.split('-')[1]-1]))+'</div>'+
       '</div>'+
       '<div class="card" style="display:flex;flex-direction:column;margin-top:0"><div class="card-t">สถานะโครงการรวม</div><div class="card-sub" style="margin-bottom:8px">ทั้งหมด '+projects.length+' โครงการ</div>'+
         '<div style="flex:1;display:flex;align-items:center;gap:10px"><div style="position:relative">'+coDonut+
@@ -1262,7 +1272,7 @@ async function renderCoDivisions(){
   const months = lastMonths(1);
   const projects = state.projects.length ? state.projects : await loadAllProjects();
   const monthly = await loadMonthlySeries(projects.map(p=>p.id), months);
-  const agg = state.divisions.map(d=>{
+  const agg = state.divisions.filter(d=>d.id!=='ops').map(d=>{
     const list = projects.filter(p=>p.division_id===d.id);
     const a = sumDivision(projects, monthly, d.id, months[0]);
     const b = list.reduce((s,p)=>s+(+p.total_amt||0),0);
@@ -1399,13 +1409,22 @@ async function renderLauncher(){
 
   divs.forEach(d=>{
     const D = divCfg(d.id);
+    if(d.id==='ops'){
+      // ฝ่ายปฏิบัติแยกออกมาจาก pjcm แล้ว ไม่มีโครงการ/วางแผน/ต้นทุนของตัวเอง
+      if(!canOps) return; // field/eng/pm/manager/admin เท่านั้นที่เข้าฝ่ายปฏิบัติได้
+      html += launchSectHtml(D.icon, d.name, D.acc, D.soft)+'<div class="launch-grid">'+
+        launcherTile('ops','ops','tool','ปฏิบัติงาน',D.acc,D.soft)+
+        launcherTile('ops','team','users','ทีมงาน',D.acc,D.soft)+
+      '</div>';
+      return;
+    }
     const nProj = state.projects.filter(x=>x.division_id===d.id).length;
     html += launchSectHtml(D.icon, d.name, D.acc, D.soft, nProj)+'<div class="launch-grid">'+
       launcherTile(d.id,'overview','bar-chart','ภาพรวมฝ่าย',D.acc,D.soft)+
       launcherTile(d.id,'projects','folder','โครงการ',D.acc,D.soft)+
       (canOps ? launcherTile(d.id,'plan','calendar','วางแผน',D.acc,D.soft)+
-                launcherTile(d.id,'ops','tool','ปฏิบัติงาน',D.acc,D.soft)+
                 launcherTile(d.id,'team','users','ทีมงาน',D.acc,D.soft) : '')+
+      (canOps && d.id!=='pjcm' ? launcherTile(d.id,'ops','tool','ปฏิบัติงาน',D.acc,D.soft) : '')+
       (canCost ? launcherTile(d.id,'cost','file-text','ต้นทุน',D.acc,D.soft) : '')+
     '</div>';
   });
@@ -2210,18 +2229,17 @@ function switchOpsTab(t){ state.opsTab=t; renderOpsPage(); renderMobileNav(); }
    ต่างจาก "วันนี้จากหน้างาน" ใน company overview ตรงที่โฟกัสเฉพาะฝ่ายนี้ + เพิ่มของที่เบิกออกยังไม่คืน ---------- */
 async function renderOpsDash(D){
   const body = document.getElementById('opsBody'); if(!body) return;
-  const projIds = state.projects.filter(p=>p.division_id===state.ws).map(p=>p.id);
   const todayD = new Date(); todayD.setHours(0,0,0,0); const today = ymd(todayD);
   const [{data:plansToday},{data:heldRows},pulse] = await Promise.all([
     sb.from('daily_plan').select('*').eq('division_id',state.ws).eq('status','อนุมัติ').gte('start_date', ymd(addDays(todayD,-60))).lte('start_date', today),
-    sb.from('requisitions').select('*').in('project_id', projIds.length?projIds:['00000000-0000-0000-0000-000000000000']).eq('status','อนุมัติ').in('kind',['รถ','เครื่องมือ']),
+    sb.from('requisitions').select('*').eq('division_id',state.ws).eq('status','อนุมัติ').in('kind',['รถ','เครื่องมือ']),
     fetchFieldPulseToday(state.ws),
   ]);
   const activeToday = (plansToday||[]).filter(r=>{ const s=new Date(r.start_date+'T00:00:00'); return addDays(s, Math.max(1,+r.duration||1)-1) >= todayD; });
   const teamsWorkingIds = new Set(activeToday.map(r=>r.team_id).filter(Boolean));
   const totalTeams = (state.cache.teams||[]).length;
   const held = (heldRows||[]).filter(r=>!r.returned_at);
-  const { data: allReqs } = await sb.from('requisitions').select('*').in('project_id', projIds.length?projIds:['00000000-0000-0000-0000-000000000000']).eq('status','รออนุมัติ');
+  const { data: allReqs } = await sb.from('requisitions').select('*').eq('division_id',state.ws).eq('status','รออนุมัติ');
   const { data: allPlansPending } = await sb.from('daily_plan').select('*').eq('division_id',state.ws).eq('status','รออนุมัติ');
 
   const stat = (n,label,color,ic) => '<div class="kpi"><div class="top"><div class="ic" style="background:'+color+'22">'+ic+'</div></div><div class="lb">'+esc(label)+'</div><div class="vl tnum">'+n+'</div></div>';
@@ -2416,7 +2434,7 @@ async function renderOpsSubmit(D){
   const { data: items } = await sb.from('item_catalog').select('*').eq('division_id',state.ws).eq('active',true).order('category').order('name');
   state.cache.reqItems = items||[];
   const teamOpts = (state.cache.teams||[]).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
-  const projOpts = state.projects.filter(p=>p.division_id===state.ws).map(p=>'<option value="'+p.id+'">'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
+  const projOpts = opsProjects().map(p=>'<option value="'+p.id+'">'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
   body.innerHTML = '<div class="card" style="'+(mob?'':'max-width:640px')+'"><div class="card-t" style="margin-bottom:2px">ตั้งงานใหม่</div>'+
     '<div class="card-sub" style="margin-bottom:14px">แนบของ/รถที่ต้องใช้ไปพร้อมกันได้เลย — PM อนุมัติทีเดียวจบทั้งงานและของที่เบิก</div>'+
     '<div class="row r2"><div class="field"><label>ทีม</label><select id="sp_team">'+(teamOpts||'<option value="">— ยังไม่มีทีม —</option>')+'</select></div>'+
@@ -2548,8 +2566,7 @@ function openCalTaskDetail(id){
 
 /* ---------- เบิกของ (อ้างอิงคลังไอเทมจริง + คืนของ) ---------- */
 async function renderOpsReq(D){
-  const projIds = state.projects.filter(p=>p.division_id===state.ws).map(p=>p.id);
-  const { data: rows, error } = await sb.from('requisitions').select('*').in('project_id', projIds.length?projIds:['00000000-0000-0000-0000-000000000000']).order('created_at',{ascending:false});
+  const { data: rows, error } = await sb.from('requisitions').select('*').eq('division_id',state.ws).order('created_at',{ascending:false});
   const body = document.getElementById('opsBody'); if(!body) return;
   if(error){ body.innerHTML='<div class="card"><div class="empty">'+esc(error.message)+'<br><br>ถ้าเห็น "does not exist" แปลว่ายังไม่ได้รัน schema_fieldwork.sql/schema_operations.sql</div></div>'; return; }
   state.cache.reqRows = rows||[];
@@ -2618,7 +2635,7 @@ function requisitionChecklistHtml(){
   ).join('')+'</div>';
 }
 function requisitionFieldsHtml(){
-  const projOpts = state.projects.filter(p=>p.division_id===state.ws).map(p=>'<option value="'+p.id+'">'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
+  const projOpts = opsProjects().map(p=>'<option value="'+p.id+'">'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
   const teamOpts = (state.cache.teams||[]).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
   return '<div class="row r2"><div class="field"><label>โครงการ</label><select id="rq_proj">'+projOpts+'</select></div>'+
     '<div class="field"><label>ทีม</label><select id="rq_team">'+(teamOpts||'<option value="">— ไม่ระบุ —</option>')+'</select></div></div>'+
@@ -2761,8 +2778,7 @@ async function deleteItem(id){
 
 /* ---------- รายงานผลหน้างาน (สรุปรวม + เชื่อมกลับ WBS) ---------- */
 async function renderOpsReports(D){
-  const projIds = state.projects.filter(p=>p.division_id===state.ws).map(p=>p.id);
-  const { data: rows, error } = await sb.from('field_reports').select('*').in('project_id', projIds.length?projIds:['00000000-0000-0000-0000-000000000000']).order('submitted_at',{ascending:false});
+  const { data: rows, error } = await sb.from('field_reports').select('*').eq('division_id',state.ws).order('submitted_at',{ascending:false});
   const body = document.getElementById('opsBody'); if(!body) return;
   if(error){ body.innerHTML='<div class="card"><div class="empty">'+esc(error.message)+'</div></div>'; return; }
   const mob = isMobileMode();
@@ -2823,10 +2839,9 @@ async function saveApplyProgress(){
 
 /* ---------- รออนุมัติ (กล่องรวม: แผนงาน + คำขอเบิก) ---------- */
 async function renderOpsApprovals(D){
-  const projIds = state.projects.filter(p=>p.division_id===state.ws).map(p=>p.id);
   const [{data:plans},{data:allReqs}] = await Promise.all([
     sb.from('daily_plan').select('*').eq('division_id',state.ws).eq('status','รออนุมัติ').order('created_at'),
-    sb.from('requisitions').select('*').in('project_id', projIds.length?projIds:['00000000-0000-0000-0000-000000000000']).eq('status','รออนุมัติ').order('created_at'),
+    sb.from('requisitions').select('*').eq('division_id',state.ws).eq('status','รออนุมัติ').order('created_at'),
   ]);
   // ของ/รถที่แนบมากับงาน (daily_plan_id ตรงกัน) โชว์รวมในการ์ดงานเลย ไม่ต้องอนุมัติแยก — เหลือแค่คำขอเบิกแบบ ad-hoc (ไม่ผูกงาน) ในกล่องขวา
   const reqs = (allReqs||[]).filter(r=>!r.daily_plan_id);
@@ -2940,7 +2955,7 @@ async function uploadPhotos(pathPrefix, onProgress){
  * FIELD REPORTS — รายงานผลหลังทำงานจริง (พร้อมรูป) เปิดจากปุ่มในหน้า Plan/Day หรือแท็บปฏิบัติงาน
  * ============================================================ */
 function fieldReportFieldsHtml(projectId, teamId, needPicker, plan){
-  const projOpts = state.projects.filter(p=>p.division_id===state.ws).map(p=>'<option value="'+p.id+'"'+(p.id===projectId?' selected':'')+'>'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
+  const projOpts = opsProjects().map(p=>'<option value="'+p.id+'"'+(p.id===projectId?' selected':'')+'>'+esc(p.code)+' · '+esc(p.name)+'</option>').join('');
   const teamOpts = (state.cache.teams||[]).map(t=>'<option value="'+t.id+'"'+(t.id===teamId?' selected':'')+'>'+esc(t.name)+'</option>').join('');
   // เมื่อรายงานผลผูกกับใบสั่งงาน (WO) อยู่แล้ว — โชว์บริบท (สถานที่/เป้าหมาย) แทนการให้กรอกซ้ำ ตามสเปค auto-fill ของ FieldSync
   const ctx = plan ? '<div style="padding:10px 12px;background:var(--soft);border-radius:12px;margin-bottom:14px;font-size:12px;color:var(--ink2);line-height:1.6">'+
