@@ -4,21 +4,15 @@
     <meta charset="utf-8" />
     <title>WRC ERP</title>
     <!--
-      GitHub Pages ไม่รู้จัก route ของ React Router (เช่น /admin/store) เพราะมันหาไฟล์จริงไม่เจอ
-      แล้ว fallback มาที่ 404.html — ตัวนี้เก็บ path เดิมไว้ใน query string แล้วเด้งกลับไป index.html
-      จากนั้น index.html จะแปลงกลับเป็น path จริงก่อน React Router mount (ดู script ใน public/index.html)
-      อ้างอิงเทคนิคมาตรฐาน: https://github.com/rafgraph/spa-github-pages
+      GitHub Pages ไม่รู้จัก route ของ React Router (เช่น /admin/pjcm) — หาไฟล์จริงไม่เจอแล้ว fallback มาที่นี่
+      เก็บ path เดิม (รวม query string ปุ่มรีเฟรช ?v=...) ไว้ใน ?__redirect= แบบ encode เต็มรูปแบบ
+      แล้วเด้งกลับไป index.html ซึ่งจะถอดรหัสคืนเป็น path จริงก่อน React Router mount (ดู index.html)
     -->
     <script>
-      var pathSegmentsToKeep = 1; // เก็บ /mango-dashboard/ ไว้เป็น base
+      var base = "/mango-dashboard/";
       var l = window.location;
-      l.replace(
-        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
-        l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?p=' +
-        l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
-        (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '') +
-        l.hash
-      );
+      var rest = l.pathname.slice(base.length) + l.search + l.hash;
+      l.replace(base + "?__redirect=" + encodeURIComponent(rest));
     </script>
   </head>
   <body></body>

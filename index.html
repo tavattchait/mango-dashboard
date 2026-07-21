@@ -2,7 +2,7 @@
 <html lang="th">
   <head>
     <meta charset="utf-8"/>
-    <link rel="icon" href="/mango-dashboard/favicon.ico"/>
+    <link rel="icon" type="image/png" href="/mango-dashboard/wrc-logo.png"/>
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
     <meta name="theme-color" content="#4338CA"/>
     <link rel="manifest" href="/mango-dashboard/manifest.json"/>
@@ -11,18 +11,17 @@
     <!-- ฟอนต์: IBM Plex Sans Thai (body ไทย) + Space Grotesk (ตัวเลข) + IBM Plex Mono (code) + DM Sans/Poppins (เดิม Horizon) -->
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <title>WRC ERP</title>
-    <!-- คู่กับ public/404.html — แปลง query string (?p=...) กลับเป็น path จริงก่อน React Router mount -->
+    <!-- คู่กับ public/404.html — ถอดรหัส ?__redirect= กลับเป็น path จริงก่อน React Router mount -->
     <script>
-      (function(l) {
-        if (l.search[1] === 'p') {
-          var decoded = l.search.slice(3).split('&').map(function(s) { return s.replace(/~and~/g, '&'); });
-          window.history.replaceState(null, null,
-            l.pathname.slice(0, -1) + decoded[0] + (decoded[1] ? '?' + decoded[1] : '') + l.hash
-          );
+      (function (l) {
+        var params = new URLSearchParams(l.search);
+        var redirect = params.get('__redirect');
+        if (redirect) {
+          window.history.replaceState(null, null, '/mango-dashboard/' + redirect);
         }
       })(window.location);
     </script>
-    <script type="module" crossorigin src="/mango-dashboard/assets/index-CaBWWG1P.js"></script>
+    <script type="module" crossorigin src="/mango-dashboard/assets/index-DIM3axeV.js"></script>
     <link rel="stylesheet" crossorigin href="/mango-dashboard/assets/index-CuXWeSM8.css">
   </head>
   <body class="font-dm bg-lightPrimary">
