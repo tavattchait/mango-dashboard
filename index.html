@@ -735,6 +735,8 @@ function todayThaiStr(){ const d=new Date(); const WD=['อาทิตย์','
 function lastMonths(n){ const out=[]; const d=new Date(); d.setDate(1); for(let i=n-1;i>=0;i--){ const x=new Date(d.getFullYear(),d.getMonth()-i,1); out.push(x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')); } return out; }
 function currentMonth(){ return new Date().toISOString().slice(0,7); }
 function content(html){ document.getElementById('content').innerHTML = html; }
+// โหลดหน้าใหม่แบบเลี่ยงแคชเก่าของเบราว์เซอร์ — ต่อ query string ใหม่ทุกครั้งกัน browser คืนไฟล์ index.html เดิมที่จำไว้
+function hardRefresh(){ location.href = location.pathname + '?v=' + Date.now(); }
 function toast(msg, type){
   const el = document.createElement('div');
   el.className = 'toast ' + (type||'');
@@ -1056,6 +1058,8 @@ function renderShell(){
       '<input placeholder="ค้นหาโครงการ..." value="'+esc(state.searchQuery)+'" oninput="setSearch(this.value)"></div>';
     if(canWrite(state.ws)) actions += '<button class="btn btn-primary btn-sm" style="--acc:'+D.acc+';--acc2:'+D.acc2+'" onclick="newProjectForm()">+ โครงการใหม่</button>';
   }
+  actions += '<button class="icon-btn" onclick="hardRefresh()" title="โหลดเวอร์ชันล่าสุด (เลี่ยงแคชเก่า)" aria-label="โหลดเวอร์ชันล่าสุด">'+
+    '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#5B6B84" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg></button>';
   actions += '<div style="position:relative">'+
     '<button class="icon-btn" onclick="toggleMenu(\'notif\')"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#5B6B84" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path></svg><span class="notif-dot"></span></button>'+
     (state.openMenu==='notif' ? '<div class="rail-pop-bg" onclick="closeMenu()"></div><div id="notifPop" style="position:absolute;right:0;top:48px;width:300px;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 28px -10px rgba(16,24,40,.22);z-index:99;padding:6px"><div class="empty">กำลังโหลด…</div></div>' : '')+
