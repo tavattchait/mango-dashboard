@@ -493,11 +493,12 @@ function buildMockDb(){
   const attachments = attachSeed.map(r=>{ const proj=projects.find(p=>p.code===r[0]);
     return { id:genId(), project_id:proj.id, file_url:PLACEHOLDER_DOC, name:r[1], uploaded_by:null, uploaded_at:new Date().toISOString() }; });
 
+  // ทีมงานสนามทุกฝ่าย (pjcm/en/pc) รวมศูนย์อยู่ที่ฝ่ายปฏิบัติ ('ops') เดียวแล้ว
   const teams = [
     { id:genId(), division_id:'ops', name:'ทีม A สายใต้ดิน', members:['อนันต์ ศรีสุข','วีระ ใจดี'] },
     { id:genId(), division_id:'ops', name:'ทีม C ไลน์แมน', members:['สมชาย ก้องภพ'] },
-    { id:genId(), division_id:'en', name:'ทีม B โซลาร์', members:['วิภาดา ทองคำ','ธนา สว่างวงศ์'] },
-    { id:genId(), division_id:'pc', name:'ทีม D โยธา/บ่อปูน', members:['ประเสริฐ มั่นคง'] },
+    { id:genId(), division_id:'ops', name:'ทีม B โซลาร์', members:['วิภาดา ทองคำ','ธนา สว่างวงศ์'] },
+    { id:genId(), division_id:'ops', name:'ทีม D โยธา/บ่อปูน', members:['ประเสริฐ มั่นคง'] },
   ];
 
   // คลังไอเทมเบิกจริง — อ้างอิงฟอร์มกระดาษ CMT01 (ใบเบิกเครื่องมือเครื่องจักรประจำวัน) ให้ครบทุกหมวด
@@ -546,23 +547,24 @@ function buildMockDb(){
     ['อุปกรณ์สิ้นเปลือง','วัสดุ','น้ำมันเอนกประสงค์ Sonek','กระป๋อง'],
   ];
   // ชื่อเฉพาะที่ seed อื่นในไฟล์นี้ยังอ้างถึง (dailyTasksSeed/requisitions ด้านล่าง) — คงไว้ให้ครบตามเดิม
-  // คลังไอเทมของ pjcm ย้ายไปอยู่ใต้ 'ops' แล้ว (ฝ่ายปฏิบัติแยกออกมา en/pc ยังมีคลังไอเทมของตัวเองเหมือนเดิม)
-  const LEGACY_ITEMS = { ops:[['เครื่องจักรหนัก/รถเช่า','รถ','รถเครน 10 ตัน','คัน']], en:[['เครื่องจักรหนัก/รถเช่า','รถ','รถกระเช้า 12 เมตร','คัน']], pc:[['เครื่องจักรหนัก/รถเช่า','รถ','รถโม่ปูน','คัน']] };
-  const item_catalog = [];
-  ['ops','en','pc'].forEach(div=>{
-    CMT01_ITEMS.concat(LEGACY_ITEMS[div]).forEach(r=>item_catalog.push(
-      { id:genId(), division_id:div, category:r[0], kind:r[1], name:r[2], unit:r[3], code:'', active:true, created_at:new Date().toISOString() }));
-  });
-  const findItem = (div,name) => item_catalog.find(i=>i.division_id===div && i.name===name);
+  // คลังไอเทมทุกฝ่าย (pjcm/en/pc) รวมศูนย์อยู่ที่ฝ่ายปฏิบัติ ('ops') เดียวแล้ว
+  const LEGACY_ITEMS = [
+    ['เครื่องจักรหนัก/รถเช่า','รถ','รถเครน 10 ตัน','คัน'],
+    ['เครื่องจักรหนัก/รถเช่า','รถ','รถกระเช้า 12 เมตร','คัน'],
+    ['เครื่องจักรหนัก/รถเช่า','รถ','รถโม่ปูน','คัน'],
+  ];
+  const item_catalog = CMT01_ITEMS.concat(LEGACY_ITEMS).map(r=>
+    ({ id:genId(), division_id:'ops', category:r[0], kind:r[1], name:r[2], unit:r[3], code:'', active:true, created_at:new Date().toISOString() }));
+  const findItem = (div,name) => item_catalog.find(i=>i.division_id==='ops' && i.name===name);
 
   const dailyTasksSeed = [
     ['ops',0,'ทีม A สายใต้ดิน','PJ-2601','ขุดเปิด + วางท่อ HDD',-2,8,70,'อนุมัติ','กลางวัน','ถนนสาธิต MH.03 → MH.04',5,1,'รถเครน 10 ตัน'],
     ['ops',0,'ทีม A สายใต้ดิน','PJ-2601','ร้อยสาย + เชื่อมต่อ',6,6,20,'อนุมัติ','กลางวัน','ถนนสาธิต MH.04 → MH.05',4,1,''],
     ['ops',1,'ทีม C ไลน์แมน','PJ-2603','ปักเสาไฟฟ้า LED',-1,5,100,'อนุมัติ','กลางวัน','',6,0,''],
     ['ops',1,'ทีม C ไลน์แมน','PJ-2602','สำรวจแนวเขตก่อนเดินสาย',1,2,0,'รออนุมัติ','กลางคืน','ย่านเมืองเก่า ถ.ถลาง',3,0,''],
-    ['en',2,'ทีม B โซลาร์','EN-2601','ติดตั้งโครงสร้างแผง',-3,7,80,'อนุมัติ','กลางวัน','',7,2,'รถกระเช้า 12 เมตร'],
-    ['en',2,'ทีม B โซลาร์','EN-2601','ติดตั้งแผงโซลาร์ 550W',4,8,40,'อนุมัติ','กลางวัน','',7,2,''],
-    ['pc',3,'ทีม D โยธา/บ่อปูน','PC-2602','งานเหล็กเสริม + แบบหล่อ',-1,7,35,'อนุมัติ','กลางวัน','',5,0,'รถโม่ปูน'],
+    ['ops',2,'ทีม B โซลาร์','EN-2601','ติดตั้งโครงสร้างแผง',-3,7,80,'อนุมัติ','กลางวัน','',7,2,'รถกระเช้า 12 เมตร'],
+    ['ops',2,'ทีม B โซลาร์','EN-2601','ติดตั้งแผงโซลาร์ 550W',4,8,40,'อนุมัติ','กลางวัน','',7,2,''],
+    ['ops',3,'ทีม D โยธา/บ่อปูน','PC-2602','งานเหล็กเสริม + แบบหล่อ',-1,7,35,'อนุมัติ','กลางวัน','',5,0,'รถโม่ปูน'],
   ];
   // หน่วยงาน/เป้าหมาย (qty_planned) ตัวอย่างต่อประเภทงาน — ใช้จำลองใบสั่งงานที่ PM เติมค่างานไว้แล้ว
   const WO_UNIT_GUESS = task => /วางท่อ|ร้อยสาย|ท่อ/.test(task) ? ['เมตร',300] : /ปักเสา/.test(task) ? ['ต้น',20] : /แผงโซลาร์|ติดตั้งแผง/.test(task) ? ['แผง',60] : /โครงสร้าง/.test(task) ? ['ชุด',10] : /เหล็กเสริม|แบบหล่อ/.test(task) ? ['ตร.ม.',80] : ['หน่วย',100];
@@ -615,7 +617,7 @@ function buildMockDb(){
   const enCraneItem = findItem('en','รถกระเช้า 12 เมตร');
   const pjHddItem = findItem('ops','เครื่อง HDD เจาะดันท่อ');
   const requisitions = [
-    { id:genId(), project_id:projects.find(p=>p.code==='EN-2601').id, division_id:'en', team_id:teams[2].id, kind:'รถ', item_id:enCraneItem?enCraneItem.id:null, item:'รถกระเช้า 12 เมตร', reason:'ยกแผงโซลาร์ขึ้นโครงสร้าง', detail:'', when_date:ymdOffset(2), status:'รออนุมัติ', created_by:null, approved_by:null, approved_at:null, returned_at:null, returned_by:null, return_note:null, created_at:new Date().toISOString() },
+    { id:genId(), project_id:projects.find(p=>p.code==='EN-2601').id, division_id:'ops', team_id:teams[2].id, kind:'รถ', item_id:enCraneItem?enCraneItem.id:null, item:'รถกระเช้า 12 เมตร', reason:'ยกแผงโซลาร์ขึ้นโครงสร้าง', detail:'', when_date:ymdOffset(2), status:'รออนุมัติ', created_by:null, approved_by:null, approved_at:null, returned_at:null, returned_by:null, return_note:null, created_at:new Date().toISOString() },
     { id:genId(), project_id:projects.find(p=>p.code==='PJ-2601').id, division_id:'ops', team_id:teams[0].id, kind:'เครื่องมือ', item_id:pjHddItem?pjHddItem.id:null, item:'เครื่อง HDD เจาะดันท่อ', reason:'เจาะดันท่อ HDD ช่วง MH.03-04', detail:'', when_date:ymdOffset(-2), status:'อนุมัติ', created_by:null, approved_by:null, approved_at:new Date().toISOString(), returned_at:null, returned_by:null, return_note:null, created_at:new Date().toISOString() },
   ];
 
@@ -887,8 +889,7 @@ function subnavConfig(){
   if(state.ws==='ops'){ return [['ops','ปฏิบัติงาน'],['team','ทีม']]; }
   const tabs=[['overview','ภาพรวมฝ่าย'],['projects','โครงการ']];
   if(isAdmin||['pm','manager','eng','field'].includes(role)){ tabs.push(['plan','วางแผน']); }
-  // ทีม+ปฏิบัติงานของ pjcm ย้ายไปฝ่ายปฏิบัติแล้ว (ทีมงานสนามเป็น division_id='ops' ทั้งหมด) — en/pc ยังใช้แบบเดิม
-  if(state.ws!=='pjcm' && (isAdmin||['pm','manager','eng','field'].includes(role))){ tabs.push(['team','ทีม'],['ops','ปฏิบัติงาน']); }
+  // ทีม+ปฏิบัติงานของทุกฝ่าย (pjcm/en/pc) รวมอยู่ที่ฝ่ายปฏิบัติเดียวแล้ว ไม่มีในฝ่ายธุรกิจอีก
   if(isAdmin||role==='pm'||role==='manager'||role==='accountant'){ tabs.push(['cost','ต้นทุน']); }
   return tabs;
 }
@@ -907,7 +908,8 @@ function canSubmitField(divisionId){
 }
 function canApproveReq(){ return ['admin','pm','manager'].includes(state.profile.role); }
 // ฝ่ายปฏิบัติไม่มีโครงการเป็นของตัวเอง (แยกออกมาจาก pjcm) — ฟอร์มในฝ่ายปฏิบัติเลือกโครงการจาก pjcm แทน
-function opsProjects(){ return state.projects.filter(p=>p.division_id===(state.ws==='ops'?'pjcm':state.ws)); }
+// ฝ่ายปฏิบัติรวมศูนย์ให้ทุกฝ่ายธุรกิจแล้ว (pjcm/en/pc) — ฟอร์มในฝ่ายปฏิบัติเลือกโครงการจากทั้ง 3 ฝ่ายได้
+function opsProjects(){ return state.ws==='ops' ? state.projects.filter(p=>['pjcm','en','pc'].includes(p.division_id)) : state.projects.filter(p=>p.division_id===state.ws); }
 
 /* ---------- Mobile app mode ----------
    field/eng ใช้หน้ามือถือเป็น default (เพราะเข้าทำงานจากโทรศัพท์/iPad) แต่สลับไป desktop ได้
@@ -1384,6 +1386,7 @@ const LICO = {
   'user-check': '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline>',
   'target': '<circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="5"></circle><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"></circle>',
   'clipboard': '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1"></rect>',
+  'image': '<rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline>',
 };
 function licon(name, size){
   size = size||26;
@@ -1425,9 +1428,7 @@ async function renderLauncher(){
     html += launchSectHtml(D.icon, d.name, D.acc, D.soft, nProj)+'<div class="launch-grid">'+
       launcherTile(d.id,'overview','bar-chart','ภาพรวมฝ่าย',D.acc,D.soft)+
       launcherTile(d.id,'projects','folder','โครงการ',D.acc,D.soft)+
-      (canOps ? launcherTile(d.id,'plan','calendar','วางแผน',D.acc,D.soft)+
-                launcherTile(d.id,'team','users','ทีมงาน',D.acc,D.soft) : '')+
-      (canOps && d.id!=='pjcm' ? launcherTile(d.id,'ops','tool','ปฏิบัติงาน',D.acc,D.soft) : '')+
+      (canOps ? launcherTile(d.id,'plan','calendar','วางแผน',D.acc,D.soft) : '')+
       (canCost ? launcherTile(d.id,'cost','file-text','ต้นทุน',D.acc,D.soft) : '')+
     '</div>';
   });
@@ -2192,33 +2193,63 @@ function reqStatusPill(s){
   const m=map[s]||map['รออนุมัติ'];
   return '<span class="pill" style="color:'+m.c+';background:'+m.bg+'">'+esc(s)+'</span>';
 }
+// รายชื่อหน้าย่อยของฝ่ายปฏิบัติ (icon key ใช้ร่วมกับ LICO ของเมนูหลัก) — ใช้ทั้งใน breadcrumb และหน้ารวมเมนู
+const OPS_PAGES = [
+  ['dash','สรุป','bar-chart',true],
+  ['wo','ใบสั่งงาน','clipboard',true],
+  ['today','งานวันนี้','activity',false],
+  ['submit','ตั้งงาน','folder',false],
+  ['cal','ปฏิทิน','calendar',false],
+  ['req','เบิกของ','file-text',false],
+  ['items','คลังไอเทม','grid',false],
+  ['reports','รายงานผล','image',false],
+  ['approvals','รออนุมัติ','user-check',true],
+];
 async function renderOpsPage(){
   const D = divCfg(state.ws);
   await loadAllProjects();
   const { data: teams } = await sb.from('teams').select('*').eq('division_id',state.ws).order('name');
   state.cache.teams = teams||[];
-  if(!state.opsTab) state.opsTab = 'today';
+  if(!state.opsTab) state.opsTab = 'home';
   const mob = isMobileMode();
   const canLead = canApproveReq();
-  const tabs = [];
-  if(canLead) tabs.push(['dash','สรุป'],['wo','ใบสั่งงาน']);
-  tabs.push(['today','งานวันนี้'],['submit','ตั้งงาน'],['cal','ปฏิทิน'],['req','เบิกของ'],['items','คลังไอเทม'],['reports','รายงานผล']);
-  if(canLead) tabs.push(['approvals','รออนุมัติ']);
-  const tabBar = mob ? '' :
-    '<div style="display:flex;background:#fff;border:1px solid var(--line);border-radius:16px;padding:3px;margin-bottom:14px;flex-wrap:wrap;gap:2px">'+
-    tabs.map(t=>'<button onclick="switchOpsTab(\''+t[0]+'\')" style="padding:7px 16px;border:none;border-radius:12px;font-family:inherit;font-size:12px;font-weight:'+(state.opsTab===t[0]?600:500)+';cursor:pointer;background:'+(state.opsTab===t[0]?D.acc:'transparent')+';color:'+(state.opsTab===t[0]?'#fff':'#5B6B84')+'">'+t[1]+'</button>').join('')+
-    '</div>';
-  let html = '<div class="page'+(mob?'':' wide')+'">'+tabBar+'<div id="opsBody"></div></div>';
+  const pages = OPS_PAGES.filter(p=>!p[3]||canLead);
+  const current = pages.find(p=>p[0]===state.opsTab);
+  // มือถือ: bottom-nav จัดการ nav เอง ไม่ต้องมี header ซ้ำ · เดสก์ท็อป: หน้า home ไม่ต้องมี header (ตัวมันเองคือเมนูอยู่แล้ว) หน้าอื่นมี breadcrumb กลับสั้นๆ แทนแถบแท็บยาวเดิม
+  const header = mob ? '' : (state.opsTab==='home' ? '' :
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">'+
+      '<button class="btn btn-ghost btn-sm" onclick="switchOpsTab(\'home\')">← เมนู</button>'+
+      '<span style="font-size:13.5px;font-weight:700;color:var(--ink)">'+(current?esc(current[1]):'')+'</span>'+
+    '</div>');
+  let html = '<div class="page'+(mob?'':' wide')+'">'+header+'<div id="opsBody"></div></div>';
   content(html);
-  if(state.opsTab==='dash' && canLead) await renderOpsDash(D);
+  if(state.opsTab==='home' && !mob) renderOpsHome(D, pages);
+  else if(state.opsTab==='dash' && canLead) await renderOpsDash(D);
   else if(state.opsTab==='wo' && canLead) await renderOpsWO(D);
-  else if(state.opsTab==='today') await renderOpsToday(D);
+  else if(state.opsTab==='today' || state.opsTab==='home') await renderOpsToday(D);
   else if(state.opsTab==='submit') await renderOpsSubmit(D);
   else if(state.opsTab==='cal') await renderOpsCalendar(D);
   else if(state.opsTab==='req') await renderOpsReq(D);
   else if(state.opsTab==='items') await renderOpsItems(D);
   else if(state.opsTab==='reports') await renderOpsReports(D);
   else if(state.opsTab==='approvals') await renderOpsApprovals(D);
+}
+// หน้ารวมเมนูฝ่ายปฏิบัติ (desktop เท่านั้น — มือถือลง "งานวันนี้" ตรงเสมออยู่แล้วผ่าน bottom-nav)
+function renderOpsHome(D, pages){
+  const body = document.getElementById('opsBody'); if(!body) return;
+  const groups = [
+    ['ภาพรวม', pages.filter(p=>['dash','wo','cal'].includes(p[0]))],
+    ['งานประจำวัน', pages.filter(p=>['today','submit','req','reports'].includes(p[0]))],
+    ['จัดการ', pages.filter(p=>['items','approvals'].includes(p[0]))],
+  ].filter(([,list])=>list.length);
+  body.innerHTML = '<div class="launcher-wrap" style="padding-top:6px">'+groups.map(([label,list])=>
+    '<div class="launch-sect" style="margin-top:10px"><span>'+esc(label)+'</span></div>'+
+    '<div class="launch-grid">'+list.map(p=>
+      '<button class="launch-tile" style="--tc:'+D.acc+'" onclick="switchOpsTab(\''+p[0]+'\')">'+
+        '<div class="lt-icon" style="background:'+D.soft+';color:'+D.acc+'">'+licon(p[2])+'</div>'+
+        '<div class="lt-name">'+esc(p[1])+'</div></button>'
+    ).join('')+'</div>'
+  ).join('')+'</div>';
 }
 function switchOpsTab(t){ state.opsTab=t; renderOpsPage(); renderMobileNav(); }
 
