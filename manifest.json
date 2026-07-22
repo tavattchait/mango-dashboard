@@ -3,8 +3,8 @@
   "name": "ระบบ WRC ERP",
   "icons": [
     {
-      "src": "wrc-logo.png",
-      "sizes": "239x240",
+      "src": "wrc-logo-icon.png",
+      "sizes": "1278x1280",
       "type": "image/png"
     }
   ],
